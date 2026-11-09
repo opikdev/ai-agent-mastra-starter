@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Evals run with the configured `AGENT_MAX_STEPS`, `AGENT_MAX_OUTPUT_TOKENS`, and `AGENT_MEMORY_MESSAGES`, through the same `runOptions()` as the API, instead of their own hardcoded options.
 - Approving a tool call as soon as `approval-required` arrives no longer fails with `409 approval-not-pending`. The run is saved as waiting first, so the event now comes just before `done`.
 - A run that times out or loses its client now cancels its notes API calls, so an update can no longer land after the run failed.
+- Shutting down no longer leaves runs marked running, which made their threads return `409 thread-busy` for minutes after each deploy. `SIGTERM` aborts open runs, which end as failed with an `error` event and `done` status `aborted`, and the process exits within 9 seconds.
 
 ## [0.1.0] - 2026-11-09
 

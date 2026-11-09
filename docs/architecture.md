@@ -19,7 +19,7 @@ An approval resumes the same run from its Postgres snapshot, so it works after a
 
 | Path | Does |
 |---|---|
-| `src/index.ts` | Starts the server, the cleanup timer, and graceful shutdown |
+| `src/index.ts` | Starts the server and the cleanup timer, and on shutdown aborts open runs before it exits |
 | `src/app.ts` | Builds the Hono app: middleware, routes, and error handling |
 | `src/config.ts` | Parses and validates the environment |
 | `src/http/` | Auth, rate limits, validation, and the routes |

@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { runs } from '../../src/db/schema.ts';
 import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
 
 describe('auth', () => {
@@ -180,5 +182,33 @@ describe('a timeout during a tool call', () => {
     );
     expect(call).toBeDefined();
     expect(call?.signal.aborted).toBe(true);
+  });
+});
+
+describe('shutdown', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack();
+  });
+  afterAll(() => stack.close());
+
+  it('ends an open run as failed, so its thread is free for the next process', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    const before = stack.anthropic.requests.length;
+    stack.anthropic.delayMs = 5000;
+    const reply = user.say(thread.id, 'hi');
+    await vi.waitFor(() => expect(stack.anthropic.requests.length).toBeGreaterThan(before));
+    stack.shutdown.abort();
+    const events = await reply;
+    stack.anthropic.delayMs = 0;
+
+    expect(eventsOf(events, 'error')[0]).toMatchObject({
+      type: 'urn:problem:service-unavailable',
+      detail: 'The server shut down during this run. Send your message again.',
+    });
+    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    const rows = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
+    expect(rows.map((row) => row.status)).toEqual(['failed']);
   });
 });

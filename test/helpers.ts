@@ -63,6 +63,8 @@ export interface TestStack {
   db: Db;
   app: ReturnType<typeof createApp>;
   logs: string[];
+  /** Aborting it is what SIGTERM does to the real server. */
+  shutdown: AbortController;
   signUp: () => TestUser;
   reply: (...replies: Reply[]) => void;
   close: () => Promise<void>;
@@ -104,7 +106,15 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     },
   });
   const { mastra, agent } = createMastra(config, pool);
-  const app = createApp({ config, db, logger, agent, fetch: notesApi.fetch });
+  const shutdown = new AbortController();
+  const app = createApp({
+    config,
+    db,
+    logger,
+    agent,
+    fetch: notesApi.fetch,
+    shutdownSignal: shutdown.signal,
+  });
 
   function signUp(): TestUser {
     const id = `usr_${randomUUID().replaceAll('-', '')}`;
@@ -151,6 +161,7 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     db,
     app,
     logs,
+    shutdown,
     signUp,
     reply: (...replies) => {
       anthropic.replies.push(...replies);

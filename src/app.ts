@@ -25,9 +25,17 @@ export interface AppDependencies {
   logger: Logger;
   agent: Assistant;
   fetch?: typeof fetch;
+  shutdownSignal?: AbortSignal;
 }
 
-export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDependencies) {
+export function createApp({
+  config,
+  db,
+  logger,
+  agent,
+  fetch: fetcher,
+  shutdownSignal = new AbortController().signal,
+}: AppDependencies) {
   const app = new Hono<AppEnv>();
   const trustProxy = config.TRUST_PROXY;
 
@@ -89,6 +97,7 @@ export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDepe
       perUser: true,
       trustProxy,
     }),
+    shutdownSignal,
   });
 
   app.route('/', createHealthRoutes(db));

@@ -28,6 +28,8 @@ interface AgentRoutesOptions {
   limits: AgentLimits;
   requireAuth: MiddlewareHandler<AppEnv>;
   agentRateLimit: MiddlewareHandler<AppEnv>;
+  /** Aborts every open run when the process shuts down, so none stays marked running. */
+  shutdownSignal: AbortSignal;
 }
 
 const threadIdPattern = /^thr_[0-9a-f]{32}$/;
@@ -101,6 +103,7 @@ export function createAgentRoutes({
   limits,
   requireAuth,
   agentRateLimit,
+  shutdownSignal,
 }: AgentRoutesOptions) {
   const app = new Hono<AppEnv>();
   app.use('*', requireAuth);
@@ -120,6 +123,12 @@ export function createAgentRoutes({
   }
 
   function failure(result: RelayResult, requestId: string, timedOut: boolean): ProblemError {
+    if (shutdownSignal.aborted) {
+      return new ProblemError(
+        'service-unavailable',
+        'The server shut down during this run. Send your message again.',
+      );
+    }
     if (timedOut) {
       return new ProblemError(
         'service-unavailable',
@@ -153,7 +162,7 @@ export function createAgentRoutes({
         const disconnected = new AbortController();
         stream.onAbort(() => disconnected.abort());
         const timeout = AbortSignal.timeout(limits.runTimeoutMs);
-        const signal = AbortSignal.any([disconnected.signal, timeout]);
+        const signal = AbortSignal.any([disconnected.signal, timeout, shutdownSignal]);
         const heartbeat = setInterval(() => {
           runs.touch(run.id).catch((err) => logger.warn({ err, requestId }, 'Run touch failed'));
         }, 10_000);

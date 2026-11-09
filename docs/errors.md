@@ -15,6 +15,6 @@ Every error is [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Detail
 | `rate-limited` | 429 | Too many requests this minute | Wait for `Retry-After` |
 | `budget-exceeded` | 429 | Today's token budget is spent | Wait for `Retry-After`, at 00:00 UTC |
 | `internal-error` | 500 | A bug. `detail` has a request ID | Quote the request ID |
-| `service-unavailable` | 503 | Postgres, the notes API, or the model provider failed, or the run timed out | Retry later |
+| `service-unavailable` | 503 | Postgres, the notes API, or the model provider failed, the run timed out, or the server shut down during the run | Retry later |
 
 `src/platform/problem.ts` is the source of truth for slugs and statuses.
