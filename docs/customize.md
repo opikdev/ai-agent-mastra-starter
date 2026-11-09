@@ -14,8 +14,8 @@ Claude 5.5 models reject `temperature`, `top_p`, `top_k`, a forced `tool_choice`
 
 ## Add a tool
 
-1. Add a client method for the outside call, with a timeout and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
-2. Add the tool to `src/agent/tools.ts` with `createTool` and `requestContextSchema: agentContextSchema`. Read the client with `context.requestContext.get('notes')`, and wrap the call in `attempt()` so failures return `{ error }`.
+1. Add a client method for the outside call, with a timeout, an optional `signal`, and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
+2. Add the tool to `src/agent/tools.ts` with `createTool` and `requestContextSchema: agentContextSchema`. Read the client with `requestContext.get('notes')`, pass it the tool's `abortSignal` so a timed out or abandoned run cancels the call, and wrap the call in `attempt()` so failures return `{ error }`.
 3. Set `requireApproval: true` if it changes or deletes data, or costs money.
 4. Add it to `notesTools`.
 5. Test it with a scripted reply in `test/integration/`, and add an eval case.

@@ -16,7 +16,10 @@ export interface FakeNotesApi {
   fetch: typeof fetch;
   /** Notes per user ID, newest first. */
   notes: Map<string, FakeNote[]>;
+  /** Each request is recorded, and its signal can show whether the caller gave up. */
   requests: Request[];
+  /** Holds each note request this long, until the caller's signal aborts. */
+  delayMs: number;
   failNext: (status: number, detail?: string, headers?: Record<string, string>) => void;
   addUser: (userId: string, token: string) => void;
 }
@@ -40,6 +43,12 @@ export function createFakeNotesApi(): FakeNotesApi {
 
   app.use(async (c, next) => {
     requests.push(c.req.raw.clone());
+    if (api.delayMs > 0 && c.req.path.startsWith('/v1/notes')) {
+      await new Promise((resolve, reject) => {
+        setTimeout(resolve, api.delayMs);
+        c.req.raw.signal.addEventListener('abort', () => reject(c.req.raw.signal.reason));
+      });
+    }
     if (failure) {
       const { status, detail, headers } = failure;
       failure = null;
@@ -109,14 +118,15 @@ export function createFakeNotesApi(): FakeNotesApi {
     return c.body(null, 204);
   });
 
-  return {
+  const api: FakeNotesApi = {
     app,
-    fetch: ((input: string | URL | Request, init?: RequestInit) =>
-      Promise.resolve(
-        app.request(input instanceof URL ? input.toString() : input, init),
-      )) as typeof fetch,
+    fetch: ((input: string | URL | Request, init?: RequestInit) => {
+      if (init?.signal?.aborted) return Promise.reject(init.signal.reason);
+      return Promise.resolve(app.request(input instanceof URL ? input.toString() : input, init));
+    }) as typeof fetch,
     notes,
     requests,
+    delayMs: 0,
     failNext: (status, detail = 'Failure.', headers = {}) => {
       failure = { status, detail, headers };
     },
@@ -125,4 +135,5 @@ export function createFakeNotesApi(): FakeNotesApi {
       notes.set(userId, []);
     },
   };
+  return api;
 }

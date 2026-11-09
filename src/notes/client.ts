@@ -31,13 +31,17 @@ export class UpstreamError extends Error {
   }
 }
 
+/** Each call stops at its timeout, or when `signal` aborts, such as when the run ends. */
 export interface NotesClient {
   me(): Promise<{ id: string }>;
-  list(options: { limit: number; cursor?: string | undefined }): Promise<NotePage>;
-  get(id: string): Promise<Note>;
-  create(input: { title: string; body: string }): Promise<Note>;
-  update(id: string, changes: NoteChanges): Promise<Note>;
-  remove(id: string): Promise<void>;
+  list(
+    options: { limit: number; cursor?: string | undefined },
+    signal?: AbortSignal,
+  ): Promise<NotePage>;
+  get(id: string, signal?: AbortSignal): Promise<Note>;
+  create(input: { title: string; body: string }, signal?: AbortSignal): Promise<Note>;
+  update(id: string, changes: NoteChanges, signal?: AbortSignal): Promise<Note>;
+  remove(id: string, signal?: AbortSignal): Promise<void>;
 }
 
 export interface NotesClientOptions {
@@ -93,15 +97,17 @@ export function createNotesClient({
 }: NotesClientOptions): NotesClient {
   const root = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
-  async function send(path: string, init: RequestInit = {}): Promise<Response> {
+  async function send(path: string, init: RequestInit = {}, signal?: AbortSignal) {
+    const timeout = AbortSignal.timeout(timeoutMs);
     let response: Response;
     try {
       response = await fetcher(new URL(path, root), {
         ...init,
         headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...init.headers },
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {
+      if (signal?.aborted) throw error;
       if (error instanceof DOMException && error.name === 'TimeoutError') {
         throw new UpstreamError(
           `The notes API didn't answer within ${timeoutMs / 1000} seconds. Try again later.`,
@@ -128,36 +134,36 @@ export function createNotesClient({
     async me() {
       return parse(await send('v1/users/me'), userSchema);
     },
-    async list({ limit, cursor }) {
+    async list({ limit, cursor }, signal) {
       const query = new URLSearchParams({ limit: String(limit) });
       if (cursor) query.set('cursor', cursor);
-      return parse(await send(`v1/notes?${query}`), pageSchema);
+      return parse(await send(`v1/notes?${query}`, {}, signal), pageSchema);
     },
-    async get(id) {
-      return parse(await send(notePath(id)), noteSchema);
+    async get(id, signal) {
+      return parse(await send(notePath(id), {}, signal), noteSchema);
     },
-    async create(input) {
-      const response = await send('v1/notes', {
-        method: 'POST',
-        headers: json,
-        body: JSON.stringify(input),
-      });
+    async create(input, signal) {
+      const response = await send(
+        'v1/notes',
+        { method: 'POST', headers: json, body: JSON.stringify(input) },
+        signal,
+      );
       return parse(response, noteSchema);
     },
-    async update(id, changes) {
-      const current = await send(notePath(id));
+    async update(id, changes, signal) {
+      const current = await send(notePath(id), {}, signal);
       const etag = current.headers.get('etag');
       await current.body?.cancel();
       if (!etag) throw new UpstreamError('The notes API sent a note without an ETag.');
-      const response = await send(notePath(id), {
-        method: 'PATCH',
-        headers: { ...json, 'If-Match': etag },
-        body: JSON.stringify(changes),
-      });
+      const response = await send(
+        notePath(id),
+        { method: 'PATCH', headers: { ...json, 'If-Match': etag }, body: JSON.stringify(changes) },
+        signal,
+      );
       return parse(response, noteSchema);
     },
-    async remove(id) {
-      await send(notePath(id), { method: 'DELETE' });
+    async remove(id, signal) {
+      await send(notePath(id), { method: 'DELETE' }, signal);
     },
   };
 }

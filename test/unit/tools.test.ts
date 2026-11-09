@@ -5,11 +5,11 @@ import { createNotesAssistant } from '../../src/agent/notes-assistant.ts';
 import { listNotes, notesTools } from '../../src/agent/tools.ts';
 import type { NotesClient } from '../../src/notes/client.ts';
 
-function context(notes?: Partial<NotesClient>) {
+function context(notes?: Partial<NotesClient>, abortSignal?: AbortSignal) {
   const requestContext = new RequestContext();
   requestContext.set('userId', 'usr_1');
   if (notes) requestContext.set('notes', notes);
-  return { requestContext } as never;
+  return { requestContext, abortSignal } as never;
 }
 
 describe('notes tools', () => {
@@ -47,6 +47,33 @@ describe('notes tools', () => {
       nextCursor: null,
     });
   });
+
+  it.each(Object.entries(notesTools))(
+    'passes the run’s abort signal to the notes API in %s',
+    async (_name, tool) => {
+      const signal = new AbortController().signal;
+      const received: unknown[] = [];
+      const record = async (...args: unknown[]) => {
+        received.push(args.at(-1));
+        return {
+          id: 'note_1',
+          title: 'T',
+          body: '',
+          createdAt: 'x',
+          updatedAt: 'x',
+          data: [],
+          meta: { nextCursor: null },
+        };
+      };
+      const notes = { list: record, get: record, create: record, update: record, remove: record };
+      const input = { id: 'note_1', title: 'T', body: '', limit: 5 };
+      await (tool.execute as (input: unknown, context: unknown) => Promise<unknown>)(
+        input,
+        context(notes as never, signal),
+      );
+      expect(received).toEqual([signal]);
+    },
+  );
 
   it('refuses to run without the caller’s notes client', async () => {
     const result = await listNotes.execute?.({ limit: 5 }, context());

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A model provider failure no longer logs the whole prompt. Errors in the app and Mastra logs keep only their type, message, stack, cause, and HTTP facts, and Mastra never logs at `debug`, which includes model text and tool results.
 - Evals run with the configured `AGENT_MAX_STEPS`, `AGENT_MAX_OUTPUT_TOKENS`, and `AGENT_MEMORY_MESSAGES`, through the same `runOptions()` as the API, instead of their own hardcoded options.
 - Approving a tool call as soon as `approval-required` arrives no longer fails with `409 approval-not-pending`. The run is saved as waiting first, so the event now comes just before `done`.
+- A run that times out or loses its client now cancels its notes API calls, so an update can no longer land after the run failed.
 
 ## [0.1.0] - 2026-11-09
 

@@ -92,6 +92,46 @@ describe('notes client', () => {
     expect((await failure(odd.me())).message).toContain("doesn't understand");
   });
 
+  it('stops a call when the caller’s signal aborts, without blaming the notes API', async () => {
+    const controller = new AbortController();
+    const client = createNotesClient({
+      baseUrl: 'http://notes.test',
+      token: 't',
+      timeoutMs: 5000,
+      fetch: (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    });
+    const call = client.get('note_1', controller.signal);
+    controller.abort();
+    const error = await call.then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+    expect(error).not.toBeInstanceOf(UpstreamError);
+    expect(error).toMatchObject({ name: 'AbortError' });
+  });
+
+  it('never sends the change when the signal aborts between reading and updating', async () => {
+    const { api, client } = setup();
+    const note = await client.create({ title: 'A', body: 'old' });
+    const controller = new AbortController();
+    const aborting = createNotesClient({
+      baseUrl: 'http://notes.test/',
+      token: 'good-token',
+      timeoutMs: 1000,
+      fetch: async (input, init) => {
+        const response = await api.fetch(input, init);
+        controller.abort();
+        return response;
+      },
+    });
+    await expect(aborting.update(note.id, { body: 'new' }, controller.signal)).rejects.toThrow();
+    expect(api.requests.map((request) => request.method)).not.toContain('PATCH');
+    expect(api.notes.get('usr_1')?.[0]?.body).toBe('old');
+  });
+
   it('refuses to update a note that comes without an ETag', async () => {
     const client = createNotesClient({
       baseUrl: 'http://notes.test',

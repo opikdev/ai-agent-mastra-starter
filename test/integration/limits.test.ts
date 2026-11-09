@@ -159,3 +159,26 @@ describe('timeouts', () => {
     expect(eventsOf(events, 'done')[0].status).toBe('aborted');
   });
 });
+
+describe('a timeout during a tool call', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack({ AGENT_RUN_TIMEOUT_MS: '3000' });
+  });
+  afterAll(() => stack.close());
+
+  it('cancels the notes API call', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply({ tool: { name: 'getNote', input: { id: 'note_1' } } });
+    stack.notesApi.delayMs = 10_000;
+    const events = await user.say(thread.id, 'Open note_1');
+    stack.notesApi.delayMs = 0;
+    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    const call = stack.notesApi.requests.findLast(
+      (request) => new URL(request.url).pathname === '/v1/notes/note_1',
+    );
+    expect(call).toBeDefined();
+    expect(call?.signal.aborted).toBe(true);
+  });
+});

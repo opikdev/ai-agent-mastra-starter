@@ -9,7 +9,7 @@ The service is a small Hono API in front of one Mastra agent. Hono owns HTTP: au
 3. **Run.** `src/agent/runs.ts` opens a run row. A thread has at most one open run, so two messages never interleave.
 4. **Agent.** `agent.stream()` runs with the thread as memory, the user's notes client in the request context, and the step, output, and time limits.
 5. **Guardrails.** Input processors strip control characters, then Haiku 5.5 checks the newest message for prompt injection. A flagged message ends the run as `blocked`.
-6. **Tools.** The model calls tools in `src/agent/tools.ts`. They call the notes API with the caller's token. `updateNote` and `deleteNote` pause for approval first.
+6. **Tools.** The model calls tools in `src/agent/tools.ts`. They call the notes API with the caller's token, and the call is cancelled if the run ends first. `updateNote` and `deleteNote` pause for approval first.
 7. **Relay.** `src/agent/relay.ts` turns Mastra chunks into server-sent events, and records each model call's tokens.
 8. **Settle.** The run ends as `completed`, `awaiting_approval`, `blocked`, `failed`, or `aborted`. A paused run is saved as `awaiting_approval` before the client gets `approval-required`, so it can approve at once.
 

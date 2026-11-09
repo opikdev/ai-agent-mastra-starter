@@ -26,9 +26,9 @@ export const listNotes = createTool({
     limit: z.number().int().min(1).max(50).default(20).describe('Notes per page.'),
     cursor: z.string().max(100).optional().describe('nextCursor from a previous result.'),
   }),
-  execute: async ({ limit, cursor }, context) =>
+  execute: async ({ limit, cursor }, { requestContext, abortSignal }) =>
     attempt(async () => {
-      const page = await context.requestContext.get('notes').list({ limit, cursor });
+      const page = await requestContext.get('notes').list({ limit, cursor }, abortSignal);
       return {
         notes: page.data.map(({ id, title, body, updatedAt }) => ({
           id,
@@ -46,7 +46,8 @@ export const getNote = createTool({
   requestContextSchema: agentContextSchema,
   description: 'Gets one note with its full body.',
   inputSchema: z.object({ id: noteId }),
-  execute: async ({ id }, context) => attempt(() => context.requestContext.get('notes').get(id)),
+  execute: async ({ id }, { requestContext, abortSignal }) =>
+    attempt(() => requestContext.get('notes').get(id, abortSignal)),
 });
 
 export const createNote = createTool({
@@ -57,8 +58,8 @@ export const createNote = createTool({
     title: z.string().trim().min(1).max(200).describe('Short title.'),
     body: z.string().max(10_000).default('').describe('Note text.'),
   }),
-  execute: async (input, context) =>
-    attempt(() => context.requestContext.get('notes').create(input)),
+  execute: async (input, { requestContext, abortSignal }) =>
+    attempt(() => requestContext.get('notes').create(input, abortSignal)),
 });
 
 export const updateNote = createTool({
@@ -72,8 +73,8 @@ export const updateNote = createTool({
     body: z.string().max(10_000).optional().describe('New body. Replaces the whole body.'),
   }),
   requireApproval: true,
-  execute: async ({ id, ...changes }, context) =>
-    attempt(() => context.requestContext.get('notes').update(id, changes)),
+  execute: async ({ id, ...changes }, { requestContext, abortSignal }) =>
+    attempt(() => requestContext.get('notes').update(id, changes, abortSignal)),
 });
 
 export const deleteNote = createTool({
@@ -82,9 +83,9 @@ export const deleteNote = createTool({
   description: 'Deletes a note for good. The user must approve it before it runs.',
   inputSchema: z.object({ id: noteId }),
   requireApproval: true,
-  execute: async ({ id }, context) =>
+  execute: async ({ id }, { requestContext, abortSignal }) =>
     attempt(async () => {
-      await context.requestContext.get('notes').remove(id);
+      await requestContext.get('notes').remove(id, abortSignal);
       return { deleted: id };
     }),
 });
