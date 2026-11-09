@@ -6,7 +6,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | How a message becomes an agent run, and which module does what |
 | [docs/api.md](docs/api.md) | Endpoints, stream events, and approvals |
-| [docs/customize.md](docs/customize.md) | How to change the model, add a tool, or connect another API |
+| [docs/customize.md](docs/customize.md) | How to change the model, add an agent or a tool, or connect another API |
 | [docs/evals.md](docs/evals.md) | How to add and run evals |
 | [docs/errors.md](docs/errors.md) | Every problem type the API can return |
 | [docs/operations.md](docs/operations.md) | Configuration, deploys, costs, and tracing |
@@ -33,6 +33,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 - After cloning, run `git config core.hooksPath .githooks` once to turn on the hook.
 - Tests never call a real model. Script replies on the fake in `test/fake-anthropic.ts`. Only `pnpm eval` spends money, so ask before running it.
 - Never send `temperature`, `top_p`, `top_k`, a forced `tool_choice`, or an assistant prefill. Claude 5.5 models reject them.
+- Serve one agent per deployment, because threads don't record their agent. To add one, follow [docs/customize.md](docs/customize.md#add-an-agent).
 - Keep `@mastra/core` pinned to an exact version. Upgrade it on purpose, as in [docs/customize.md](docs/customize.md#upgrade-mastra).
 - Give every tool that changes or deletes data `requireApproval: true`, and add an eval case for it.
 - Tools call outside systems with the caller's own credentials from the request context. Never give a tool a shared admin credential.

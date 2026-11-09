@@ -12,6 +12,23 @@ Claude 5.5 models reject `temperature`, `top_p`, `top_k`, a forced `tool_choice`
 2. Add or change eval cases in `evals/cases.ts`, and their golden replies, by case name, in `test/unit/evals.test.ts`.
 3. Run `pnpm verify`, then `pnpm eval`.
 
+## Add an agent
+
+A deployment serves one agent: `createMastra()` in `src/agent/mastra.ts` returns it, and the routes call it for every thread. Threads don't record which agent they belong to, so a second agent on the same database would read the first one's threads as its own memory.
+
+To run a second agent on its own:
+
+1. Copy `src/agent/notes-assistant.ts`, and give the copy its own ID, instructions, tools, and guardrails. Keep `requestContextSchema`, or give it a schema of its own.
+2. Return the new agent from `createMastra()`, and add its eval cases to `evals/cases.ts`.
+3. Deploy it with its own database, so its threads, runs, and budgets stay apart.
+
+To serve several agents from one deployment instead:
+
+1. Register each agent in `createMastra()` under its ID, and pass them all to `createAgentRoutes()`.
+2. Take an agent ID in `POST /v1/threads`, and save it with `createThread({ metadata: { agentId } })`.
+3. In `ownThread()`, read `thread.metadata.agentId`, and run that agent for messages and approvals on the thread.
+4. Test that each thread only ever runs its own agent, and document the new field in `docs/api.md`.
+
 ## Add a tool
 
 1. Add a client method for the outside call, with a timeout, an optional `signal`, and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
