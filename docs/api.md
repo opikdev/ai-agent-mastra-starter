@@ -27,7 +27,7 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 | `tool-call` | `{ toolCallId, toolName, args }` | The model calls a tool |
 | `tool-result` | `{ toolCallId, toolName, result }` | A tool returns. A failure the model can act on is `{ error }` |
 | `tool-error` | `{ toolCallId, toolName, detail }` | A tool crashed. The model is told and may try another way |
-| `approval-required` | `{ runId, toolCallId, toolName, args }` | A tool waits for approval |
+| `approval-required` | `{ runId, toolCallId, toolName, args }` | A tool waits for approval. It comes just before `done` |
 | `blocked` | `{ reason }` | A guardrail blocked the message |
 | `error` | A Problem Details object | The run failed |
 | `done` | `{ runId, status, usage: { inputTokens, outputTokens } }` | Last, unless the client disconnected |
@@ -36,7 +36,7 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 
 ## Approve a tool call
 
-When the stream ends with `awaiting_approval`, show the user `toolName` and `args`, then send the decision:
+When an `approval-required` event arrives, show the user `toolName` and `args`, then send the decision. The run is already saved as waiting, so you can send it right away, before `done` arrives:
 
 ```sh
 curl -N -X POST localhost:3000/v1/runs/$RUN_ID/approval -H "Authorization: Bearer $TOKEN" \

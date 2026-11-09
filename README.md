@@ -48,7 +48,7 @@ curl -N -X POST localhost:3000/v1/threads/$THREAD/messages -H "Authorization: Be
   -H 'Content-Type: application/json' -d '{"content":"What notes do I have?"}'
 ```
 
-Ask it to delete a note, and the stream ends with an `approval-required` event. [docs/api.md](docs/api.md) shows how to approve it.
+Ask it to delete a note, and the stream sends an `approval-required` event, then ends with `done` and status `awaiting_approval`. [docs/api.md](docs/api.md) shows how to approve it.
 
 If a port is taken, set `PORT`, `NOTES_API_PORT`, or `POSTGRES_PORT` before running Compose.
 

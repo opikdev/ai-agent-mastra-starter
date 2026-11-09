@@ -166,8 +166,7 @@ export function createAgentRoutes({
           await send('run', { runId, threadId: run.threadId });
           const output = await start(signal);
           result = await relay(output.fullStream, {
-            send: ({ event, data }) =>
-              send(event, event === 'approval-required' ? { runId, ...data } : data),
+            send: ({ event, data }) => send(event, data),
             record: async (usage) => {
               spent.inputTokens += usage.inputTokens;
               spent.outputTokens += usage.outputTokens;
@@ -183,6 +182,7 @@ export function createAgentRoutes({
 
         if (result.status === 'awaiting_approval' && result.pending) {
           await runs.await(run.id, result.pending);
+          await send('approval-required', { runId, ...result.pending });
         } else {
           const final = result.status === 'aborted' ? 'failed' : result.status;
           await runs.finish(run.id, final === 'awaiting_approval' ? 'failed' : final);
