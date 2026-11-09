@@ -37,7 +37,7 @@ The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag. Any number
 
 On `SIGTERM` or `SIGINT`, the server aborts its open runs, waits for their streams to close, and exits within 9 seconds. Each aborted run is saved as failed, and its client gets an `error` event and then `done` with status `aborted`, so the thread is free on the next instance. Give the container a stop grace period of at least 10 seconds, which is Docker's and Kubernetes' default.
 
-Put the service behind TLS. Streams can last up to `AGENT_RUN_TIMEOUT_MS`, so set your proxy's read timeout above it, and turn off response buffering for `text/event-stream`.
+Put the service behind TLS. Streams can last up to `AGENT_RUN_TIMEOUT_MS`, so set your proxy's read timeout above it, and turn off response buffering for `text/event-stream`. A keepalive comment every 10 seconds stops idle timeouts from cutting a stream short.
 
 ## Costs
 

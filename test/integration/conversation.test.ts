@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { runs } from '../../src/db/schema.ts';
 import { fakeSignature } from '../fake-anthropic.ts';
 import { eventsOf, startStack, type TestStack } from '../helpers.ts';
 
@@ -72,5 +74,45 @@ describe('a conversation', () => {
     expect(stack.notesApi.notes.get(user.id)?.map((note) => note.title)).toEqual(['Idea']);
     const create = stack.notesApi.requests.findLast((request) => request.method === 'POST');
     expect(create?.headers.get('authorization')).toBe(`Bearer ${user.token}`);
+  });
+
+  it('sends a keepalive comment while the model is slow, so proxies keep the stream open', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    const before = stack.anthropic.requests.length;
+    stack.anthropic.delayMs = 500;
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const response = user.request(`/v1/threads/${thread.id}/messages`, {
+        method: 'POST',
+        json: { content: 'hi' },
+      });
+      await vi.waitFor(() => expect(stack.anthropic.requests.length).toBeGreaterThan(before));
+      vi.advanceTimersByTime(10_000);
+      expect(await (await response).text()).toMatch(/^: keepalive$/m);
+    } finally {
+      vi.useRealTimers();
+      stack.anthropic.delayMs = 0;
+    }
+  });
+
+  it('frees the thread when the client disconnects mid-answer', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    const before = stack.anthropic.requests.length;
+    stack.anthropic.delayMs = 5000;
+    const response = await user.request(`/v1/threads/${thread.id}/messages`, {
+      method: 'POST',
+      json: { content: 'hi' },
+    });
+    await vi.waitFor(() => expect(stack.anthropic.requests.length).toBeGreaterThan(before));
+    await response.body?.cancel();
+    stack.anthropic.delayMs = 0;
+
+    await vi.waitFor(async () => {
+      const rows = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
+      expect(rows.map((row) => row.status)).toEqual(['failed']);
+    });
+    expect(eventsOf(await user.say(thread.id, 'Still there?'), 'done')[0].status).toBe('completed');
   });
 });

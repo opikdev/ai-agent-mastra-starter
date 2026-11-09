@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Streams send a `: keepalive` comment every 10 seconds, so proxies don't drop them while the model is slow.
+
 ### Changed
 
 - The agent layer no longer imports from the HTTP layer. `ProblemError` and the logger moved to `src/platform/`, `AgentContext` moved to `src/agent/context.ts`, and a test enforces the import directions.

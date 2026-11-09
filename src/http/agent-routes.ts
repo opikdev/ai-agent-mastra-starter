@@ -35,6 +35,7 @@ interface AgentRoutesOptions {
 const threadIdPattern = /^thr_[0-9a-f]{32}$/;
 const maxMessageLength = 8000;
 const maxHistory = 100;
+const heartbeatMs = 10_000;
 
 const createThreadSchema = z.strictObject({
   title: z.string().trim().min(1).max(200).optional(),
@@ -164,8 +165,9 @@ export function createAgentRoutes({
         const timeout = AbortSignal.timeout(limits.runTimeoutMs);
         const signal = AbortSignal.any([disconnected.signal, timeout, shutdownSignal]);
         const heartbeat = setInterval(() => {
+          void stream.write(': keepalive\n\n');
           runs.touch(run.id).catch((err) => logger.warn({ err, requestId }, 'Run touch failed'));
-        }, 10_000);
+        }, heartbeatMs);
 
         const send = (event: string, data: unknown) =>
           stream.writeSSE({ event, data: JSON.stringify(data) });

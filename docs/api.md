@@ -34,6 +34,8 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 
 `status` is `completed`, `awaiting_approval`, `blocked`, `failed`, or `aborted`.
 
+Every 10 seconds, the stream also sends a `: keepalive` comment, so proxies don't close it while the model thinks. SSE clients ignore comments.
+
 ## Approve a tool call
 
 When an `approval-required` event arrives, show the user `toolName` and `args`, then send the decision. The run is already saved as waiting, so you can send it right away, before `done` arrives:
