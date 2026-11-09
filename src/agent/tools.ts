@@ -2,12 +2,7 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { type NotesClient, UpstreamError } from '../notes/client.ts';
-
-/** What every agent call carries. The HTTP layer builds it from the caller's token. */
-export interface AgentContext {
-  userId: string;
-  notes: NotesClient;
-}
+import type { AgentContext } from './context.ts';
 
 const previewLength = 200;
 

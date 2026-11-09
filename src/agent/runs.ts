@@ -1,7 +1,7 @@
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { type PendingApproval, type RunStatus, runs } from '../db/schema.ts';
-import { ProblemError } from '../http/problem.ts';
+import { ProblemError } from '../platform/problem.ts';
 
 export type Run = typeof runs.$inferSelect;
 

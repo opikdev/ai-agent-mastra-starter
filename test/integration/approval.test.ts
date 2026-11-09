@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createMastra } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createDb, createPool } from '../../src/db/client.ts';
-import { createLogger } from '../../src/http/logger.ts';
+import { createLogger } from '../../src/platform/logger.ts';
 import { eventsOf, readSse, startStack, type TestStack, type TestUser } from '../helpers.ts';
 
 let stack: TestStack;

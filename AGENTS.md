@@ -36,7 +36,8 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 - Give every tool that changes or deletes data `requireApproval: true`, and add an eval case for it.
 - Tools call outside systems with the caller's own credentials from the request context. Never give a tool a shared admin credential.
 - Tools return `{ error }` for failures the model can act on, and throw for bugs.
-- Throw `ProblemError` for every HTTP failure, and add new types to `src/http/problem.ts` and `docs/errors.md`.
+- Throw `ProblemError` for every HTTP failure, and add new types to `src/platform/problem.ts` and `docs/errors.md`.
+- Keep imports pointing one way: `http` to `agent` to `notes`, `db`, and `platform`. Only `src/http/` uses Hono. `test/unit/architecture.test.ts` enforces it.
 - Scope every thread and run to the caller's user ID. Return 404, not 403, for someone else's.
 - Change the database by editing `src/db/schema.ts`, then running `pnpm db:generate`. Migrations are append-only, so never edit one that's committed.
 - Don't edit files listed in `.baseline.sha256`. They come from [opikdev/starters](https://github.com/opikdev/starters).

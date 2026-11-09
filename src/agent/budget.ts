@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { tokenUsage } from '../db/schema.ts';
-import { ProblemError } from '../http/problem.ts';
+import { ProblemError } from '../platform/problem.ts';
 
 export interface Usage {
   inputTokens: number;

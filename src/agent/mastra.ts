@@ -5,7 +5,7 @@ import { OtelExporter } from '@mastra/otel-exporter';
 import { PostgresStore } from '@mastra/pg';
 import type pg from 'pg';
 import type { Config } from '../config.ts';
-import { logRedactions } from '../http/logger.ts';
+import { logRedactions } from '../platform/logger.ts';
 import { agentId, createNotesAssistant } from './notes-assistant.ts';
 
 /** Mastra keeps memory threads and approval snapshots in this schema. */

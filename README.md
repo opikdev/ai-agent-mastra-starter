@@ -87,7 +87,8 @@ Tests never call a real model. They use a fake Anthropic API, so they're free an
 | Path | Purpose |
 |---|---|
 | `src/agent/` | The agent, its tools, runs, budgets, and Mastra wiring |
-| `src/http/` | Routes, auth, rate limits, and errors |
+| `src/http/` | Routes, auth, and rate limits |
+| `src/platform/` | Problem Details errors and the logger |
 | `src/notes/` | The client for the API the agent acts on |
 | `src/db/` | Schema, connections, and the migration runner |
 | `migrations/` | Generated SQL migrations, which are append-only |

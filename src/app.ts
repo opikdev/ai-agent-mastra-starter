@@ -13,9 +13,9 @@ import { createRequireAuth } from './http/auth.ts';
 import type { AppEnv } from './http/env.ts';
 import { createErrorHandler, respond } from './http/error-handler.ts';
 import { createHealthRoutes } from './http/health.ts';
-import type { Logger } from './http/logger.ts';
-import { ProblemError } from './http/problem.ts';
 import { rateLimit } from './http/rate-limit.ts';
+import type { Logger } from './platform/logger.ts';
+import { ProblemError } from './platform/problem.ts';
 
 const maxBodyBytes = 64 * 1024;
 

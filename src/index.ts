@@ -5,7 +5,7 @@ import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { createDb, createPool } from './db/client.ts';
 import { rateLimits } from './db/schema.ts';
-import { createLogger } from './http/logger.ts';
+import { createLogger } from './platform/logger.ts';
 
 const cleanupIntervalMs = 60 * 60 * 1000;
 

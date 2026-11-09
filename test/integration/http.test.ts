@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Assistant } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
-import { createLogger } from '../../src/http/logger.ts';
+import { createLogger } from '../../src/platform/logger.ts';
 import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
 
 let stack: TestStack;

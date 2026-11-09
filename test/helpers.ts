@@ -4,7 +4,7 @@ import { createMastra } from '../src/agent/mastra.ts';
 import { createApp } from '../src/app.ts';
 import { type Config, loadConfig } from '../src/config.ts';
 import { createDb, createPool, type Db } from '../src/db/client.ts';
-import { createLogger } from '../src/http/logger.ts';
+import { createLogger } from '../src/platform/logger.ts';
 import { type FakeAnthropic, type Reply, startFakeAnthropic } from './fake-anthropic.ts';
 import { createFakeNotesApi, type FakeNotesApi } from './fake-notes-api.ts';
 

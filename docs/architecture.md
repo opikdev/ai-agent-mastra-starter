@@ -22,17 +22,38 @@ An approval resumes the same run from its Postgres snapshot, so it works after a
 | `src/index.ts` | Starts the server, the cleanup timer, and graceful shutdown |
 | `src/app.ts` | Builds the Hono app: middleware, routes, and error handling |
 | `src/config.ts` | Parses and validates the environment |
-| `src/http/` | Auth, rate limits, validation, Problem Details, and the routes |
+| `src/http/` | Auth, rate limits, validation, and the routes |
 | `src/agent/notes-assistant.ts` | The agent: instructions, model, tools, memory, and guardrails |
+| `src/agent/context.ts` | What every agent call carries: the user ID and their notes client |
 | `src/agent/tools.ts` | The notes tools |
 | `src/agent/mastra.ts` | Mastra wiring: Postgres storage, logs, and tracing |
 | `src/agent/runs.ts` | Run rows: one open run per thread, approvals, and stale runs |
 | `src/agent/budget.ts` | Daily token budgets |
 | `src/agent/relay.ts` | Mastra stream to client events, plus token accounting |
 | `src/notes/client.ts` | The notes API client |
+| `src/platform/` | Problem Details errors and the logger, shared by every layer |
 | `src/db/` | Drizzle schema, client, and migrations |
 | `evals/` | Eval cases and the runner |
 | `test/fake-anthropic.ts` | A fake Messages API for tests |
+
+## Dependencies
+
+Imports point one way, so the agent can run without HTTP, as the evals do:
+
+```mermaid
+flowchart LR
+  http --> agent
+  http --> notes
+  agent --> notes
+  agent --> db
+  agent --> platform
+  http --> db
+  http --> platform
+  notes --> platform
+  platform --> db
+```
+
+`src/index.ts`, `src/app.ts`, and `src/db/migrate.ts` wire everything together, so they may import anything. Only `src/http/` imports Hono. `test/unit/architecture.test.ts` fails on any other import.
 
 ## Data
 

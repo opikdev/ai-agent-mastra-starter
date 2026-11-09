@@ -2,9 +2,9 @@ import { sql } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import type { Db } from '../db/client.ts';
 import { rateLimits } from '../db/schema.ts';
+import { ProblemError } from '../platform/problem.ts';
 import { clientIp } from './client-ip.ts';
 import type { AppEnv } from './env.ts';
-import { ProblemError } from './problem.ts';
 
 const windowInterval = sql`interval '1 minute'`;
 
