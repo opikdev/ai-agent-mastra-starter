@@ -2,10 +2,14 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema.ts';
 
-export function createPool(connectionString: string, statementTimeoutMs: number): pg.Pool {
+export function createPool(
+  connectionString: string,
+  statementTimeoutMs: number,
+  max = 10,
+): pg.Pool {
   return new pg.Pool({
     connectionString,
-    max: 10,
+    max,
     connectionTimeoutMillis: 5000,
     statement_timeout: statementTimeoutMs,
   });

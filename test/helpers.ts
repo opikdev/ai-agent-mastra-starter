@@ -97,7 +97,11 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     ...env,
   });
-  const pool = createPool(config.DATABASE_URL, config.DATABASE_STATEMENT_TIMEOUT_MS);
+  const pool = createPool(
+    config.DATABASE_URL,
+    config.DATABASE_STATEMENT_TIMEOUT_MS,
+    config.DATABASE_POOL_MAX,
+  );
   const db = createDb(pool);
   const logs: string[] = [];
   const logger = createLogger(env.LOG_LEVEL ?? 'debug', {

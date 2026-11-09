@@ -11,7 +11,11 @@ const shutdownTimeoutMs = 9000;
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
-const pool = createPool(config.DATABASE_URL, config.DATABASE_STATEMENT_TIMEOUT_MS);
+const pool = createPool(
+  config.DATABASE_URL,
+  config.DATABASE_STATEMENT_TIMEOUT_MS,
+  config.DATABASE_POOL_MAX,
+);
 pool.on('error', (err) => logger.error({ err }, 'Idle database connection failed'));
 const db = createDb(pool);
 const { mastra, agent } = createMastra(config, pool);

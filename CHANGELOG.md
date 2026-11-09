@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Streams send a `: keepalive` comment every 10 seconds, so proxies don't drop them while the model is slow.
 - `RUN_RETENTION_DAYS`, 30 by default: the hourly cleanup deletes finished runs and token usage older than that, on one instance at a time.
 - `APPROVAL_TTL_HOURS`, 24 by default: an approval nobody answers fails after that, so its thread takes messages again.
+- `DATABASE_POOL_MAX`, 10 by default, sets the Postgres pool size each process shares with Mastra.
 
 ### Changed
 

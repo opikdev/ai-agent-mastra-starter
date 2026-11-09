@@ -24,6 +24,7 @@ const envSchema = z
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
     DATABASE_URL: z.url(),
     DATABASE_STATEMENT_TIMEOUT_MS: positive(5000),
+    DATABASE_POOL_MAX: positive(10),
     NOTES_API_URL: z.url(),
     NOTES_API_TIMEOUT_MS: positive(5000),
     AGENT_MODEL: z.string().min(1).default('anthropic/claude-sonnet-5-5'),

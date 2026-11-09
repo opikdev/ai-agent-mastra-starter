@@ -16,6 +16,7 @@ describe('loadConfig', () => {
       AGENT_MAX_OUTPUT_TOKENS: 4096,
       AGENT_RUN_TIMEOUT_MS: 120_000,
       DAILY_TOKEN_BUDGET: 500_000,
+      DATABASE_POOL_MAX: 10,
       RUN_RETENTION_DAYS: 30,
       APPROVAL_TTL_HOURS: 24,
       TRUST_PROXY: false,
@@ -31,6 +32,16 @@ describe('loadConfig', () => {
     });
     expect(config.CORS_ORIGINS).toEqual(['https://a.test', 'https://b.test']);
     expect(config.TRUST_PROXY).toBe(true);
+  });
+
+  it('parses the pool size', () => {
+    expect(loadConfig({ ...required, DATABASE_POOL_MAX: '25' }).DATABASE_POOL_MAX).toBe(25);
+  });
+
+  it.each(['0', '-1', '2.5', 'many'])('rejects a pool size of %s', (value) => {
+    expect(() => loadConfig({ ...required, DATABASE_POOL_MAX: value })).toThrow(
+      /DATABASE_POOL_MAX/,
+    );
   });
 
   it('needs no Anthropic key when no model is from Anthropic', () => {
