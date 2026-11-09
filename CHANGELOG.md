@@ -7,12 +7,15 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Streams send a `: keepalive` comment every 10 seconds, so proxies don't drop them while the model is slow.
+- `RUN_RETENTION_DAYS`, 30 by default: the hourly cleanup deletes finished runs and token usage older than that, on one instance at a time.
+- `APPROVAL_TTL_HOURS`, 24 by default: an approval nobody answers fails after that, so its thread takes messages again.
 
 ### Changed
 
 - The agent layer no longer imports from the HTTP layer. `ProblemError` and the logger moved to `src/platform/`, `AgentContext` moved to `src/agent/context.ts`, and a test enforces the import directions.
 - Tools and the agent validate the request context with `requestContextSchema`, and the routes use Mastra's own thread and message types instead of casts.
 - Eval golden replies are keyed by case name, and seeded note IDs come from the case name, so adding or reordering cases no longer shifts them.
+- Migration `0001` drops the unused `idx_runs_user_id` index.
 
 ### Fixed
 

@@ -16,6 +16,8 @@ describe('loadConfig', () => {
       AGENT_MAX_OUTPUT_TOKENS: 4096,
       AGENT_RUN_TIMEOUT_MS: 120_000,
       DAILY_TOKEN_BUDGET: 500_000,
+      RUN_RETENTION_DAYS: 30,
+      APPROVAL_TTL_HOURS: 24,
       TRUST_PROXY: false,
       CORS_ORIGINS: [],
     });
@@ -46,6 +48,7 @@ describe('loadConfig', () => {
     ['NOTES_API_URL', { ...required, NOTES_API_URL: undefined }],
     ['ANTHROPIC_API_KEY', { ...required, ANTHROPIC_API_KEY: undefined }],
     ['AGENT_MAX_STEPS', { ...required, AGENT_MAX_STEPS: '0' }],
+    ['APPROVAL_TTL_HOURS', { ...required, APPROVAL_TTL_HOURS: '0' }],
     ['TRUST_PROXY', { ...required, TRUST_PROXY: 'yes' }],
   ])('names %s when it is missing or invalid', (name, env) => {
     expect(() => loadConfig(env)).toThrow(name);

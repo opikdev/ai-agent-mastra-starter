@@ -63,7 +63,6 @@ export const runs = pgTable(
     uniqueIndex('uq_runs_open_thread')
       .on(table.threadId)
       .where(sql`status in ('running', 'awaiting_approval')`),
-    index('idx_runs_user_id').on(table.userId),
   ],
 );
 
@@ -79,6 +78,7 @@ export const tokenUsage = pgTable(
   },
   (table) => [
     primaryKey({ name: 'pk_token_usage', columns: [table.userId, table.day] }),
+    // Serves the retention cleanup, which deletes old days across all users.
     index('idx_token_usage_day').on(table.day),
   ],
 );

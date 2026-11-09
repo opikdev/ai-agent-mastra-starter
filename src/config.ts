@@ -34,6 +34,8 @@ const envSchema = z
     GUARDRAIL_MODEL: z.string().min(1).default('anthropic/claude-haiku-5-5'),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     DAILY_TOKEN_BUDGET: positive(500_000),
+    RUN_RETENTION_DAYS: positive(30),
+    APPROVAL_TTL_HOURS: positive(24),
     CORS_ORIGINS: list,
     TRUST_PROXY: flag,
     RATE_LIMIT_PER_MINUTE: positive(300),

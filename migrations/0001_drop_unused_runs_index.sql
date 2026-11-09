@@ -1,0 +1,1 @@
+DROP INDEX "idx_runs_user_id";

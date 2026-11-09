@@ -31,7 +31,7 @@ An approval resumes the same run from its Postgres snapshot, so it works after a
 | `src/agent/budget.ts` | Daily token budgets |
 | `src/agent/relay.ts` | Mastra stream to client events, plus token accounting |
 | `src/notes/client.ts` | The notes API client |
-| `src/platform/` | Problem Details errors and the logger, shared by every layer |
+| `src/platform/` | Problem Details errors, the logger, and the hourly cleanup |
 | `src/db/` | Drizzle schema, client, and migrations |
 | `evals/` | Eval cases and the runner |
 | `test/fake-anthropic.ts` | A fake Messages API for tests |

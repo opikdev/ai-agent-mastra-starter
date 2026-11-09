@@ -19,6 +19,8 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `AGENT_RUN_TIMEOUT_MS` | `120000` | Longest a run may take |
 | `AGENT_MEMORY_MESSAGES` | `20` | Earlier messages the agent sees |
 | `DAILY_TOKEN_BUDGET` | `500000` | Input plus output tokens per user per UTC day |
+| `RUN_RETENTION_DAYS` | `30` | Days to keep finished runs and daily token usage |
+| `APPROVAL_TTL_HOURS` | `24` | Hours an approval may wait before its run fails and the thread unlocks |
 | `RATE_LIMIT_PER_MINUTE` | `300` | Requests per IP per minute |
 | `AGENT_RATE_LIMIT_PER_MINUTE` | `20` | Messages and approvals per user per minute |
 | `CORS_ORIGINS` | None | Comma-separated browser origins |
@@ -69,7 +71,13 @@ Logs never hold prompts, replies, tool arguments or results, or tokens:
 
 ## Clean up
 
-The server deletes expired rate limit rows every hour. `runs` and `token_usage` grow by one row per run and one per user per day. Delete old rows on a schedule if you don't need them.
+Every hour, one instance, picked by a Postgres advisory lock, does this:
+
+- Deletes expired rate limit rows.
+- Fails runs that have waited for approval longer than `APPROVAL_TTL_HOURS`, so their threads take messages again.
+- Deletes finished runs and `token_usage` days older than `RUN_RETENTION_DAYS`.
+
+Threads and messages stay until their user deletes them. An expired approval leaves its paused run snapshot in `mastra.mastra_workflow_snapshot`, because Mastra has no public API to delete an agent run's snapshot. Delete rows there whose `run_id` no longer has an open run in `runs`, if they pile up.
 
 ## Back up
 

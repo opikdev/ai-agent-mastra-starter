@@ -1,10 +1,9 @@
 import { serve } from '@hono/node-server';
-import { lte, sql } from 'drizzle-orm';
 import { createMastra } from './agent/mastra.ts';
 import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { createDb, createPool } from './db/client.ts';
-import { rateLimits } from './db/schema.ts';
+import { deleteExpiredRows } from './platform/cleanup.ts';
 import { createLogger } from './platform/logger.ts';
 
 const cleanupIntervalMs = 60 * 60 * 1000;
@@ -23,10 +22,12 @@ const server = serve({ fetch: app.fetch, port: config.PORT }, ({ port }) => {
   logger.info({ port, model: config.AGENT_MODEL }, 'Server listening');
 });
 
+const retention = {
+  runRetentionDays: config.RUN_RETENTION_DAYS,
+  approvalTtlHours: config.APPROVAL_TTL_HOURS,
+};
 const cleanup = setInterval(() => {
-  db.delete(rateLimits)
-    .where(lte(rateLimits.resetAt, sql`now()`))
-    .catch((err) => logger.error({ err }, 'Cleanup failed'));
+  deleteExpiredRows(db, retention).catch((err) => logger.error({ err }, 'Cleanup failed'));
 }, cleanupIntervalMs);
 cleanup.unref();
 

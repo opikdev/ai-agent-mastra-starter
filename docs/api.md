@@ -48,7 +48,7 @@ curl -N -X POST localhost:3000/v1/runs/$RUN_ID/approval -H "Authorization: Beare
 
 To decline, send `"approved": false` and an optional `reason`. The model sees the reason and answers the user.
 
-Until you decide, new messages on that thread return `409 approval-pending`. Each approval runs once: a second one returns `409 approval-not-pending`.
+Until you decide, new messages on that thread return `409 approval-pending`. An approval left for `APPROVAL_TTL_HOURS`, 24 by default, expires within the next hour: its run fails and the thread takes messages again. Each approval runs once: a second one returns `409 approval-not-pending`.
 
 ## Read the stream in TypeScript
 
