@@ -2,7 +2,6 @@ const problemCatalog = {
   'validation-failed': { status: 400, title: 'Request validation failed' },
   unauthorized: { status: 401, title: 'Authentication required' },
   'not-found': { status: 404, title: 'Resource not found' },
-  'method-not-allowed': { status: 405, title: 'Method not allowed' },
   'thread-busy': { status: 409, title: 'Thread is busy' },
   'approval-pending': { status: 409, title: 'Approval pending' },
   'approval-not-pending': { status: 409, title: 'No approval pending' },

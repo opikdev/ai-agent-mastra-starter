@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Eval golden replies are keyed by case name, and seeded note IDs come from the case name, so adding or reordering cases no longer shifts them.
 - Migration `0001` drops the unused `idx_runs_user_id` index.
 - **Breaking:** `TRUST_PROXY` is replaced by `TRUST_PROXY_HOPS`, the number of proxies that append to `X-Forwarded-For`, 0 by default. The server refuses to start while `TRUST_PROXY` is set. Set `TRUST_PROXY_HOPS=1` for what `TRUST_PROXY=true` did.
+- Removed the unused `method-not-allowed` problem type. A test keeps `docs/errors.md` and the problem types in step.
 
 ### Fixed
 

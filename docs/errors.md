@@ -17,4 +17,4 @@ Every error is [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Detail
 | `internal-error` | 500 | A bug. `detail` has a request ID | Quote the request ID |
 | `service-unavailable` | 503 | Postgres, the notes API, or the model provider failed, the run timed out, or the server shut down during the run | Retry later |
 
-`src/platform/problem.ts` is the source of truth for slugs and statuses.
+`src/platform/problem.ts` is the source of truth for slugs and statuses. `test/unit/problem.test.ts` fails if this table and it differ.
