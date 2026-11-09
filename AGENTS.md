@@ -41,7 +41,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 - Keep imports pointing one way: `http` to `agent` to `notes`, `db`, and `platform`. Only `src/http/` uses Hono. `test/unit/architecture.test.ts` enforces it.
 - Never log prompts, messages, tool arguments or results, or tokens. Log errors as `err`, which `src/platform/logger.ts` reduces to what failed.
 - Scope every thread and run to the caller's user ID. Return 404, not 403, for someone else's.
-- Change the database by editing `src/db/schema.ts`, then running `pnpm db:generate`. Migrations are append-only, so never edit one that's committed.
+- Change the database by editing `src/db/schema.ts`, then running `pnpm db:generate`. Migrations are append-only, so never edit one that's committed. `pnpm db:check`, part of `pnpm verify`, fails on an edit since `origin/main`.
 - Don't edit files listed in `.baseline.sha256`. They come from [opikdev/starters](https://github.com/opikdev/starters).
 - Keep this file a short map, and put detail in `docs/`.
 - Fix any doc your change makes wrong, in the same change.
