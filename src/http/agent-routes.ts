@@ -1,12 +1,11 @@
 import type { MastraDBMessage, StorageThreadType } from '@mastra/core/memory';
-import { RequestContext } from '@mastra/core/request-context';
 import type { ChunkType } from '@mastra/core/stream';
 import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { type SSEStreamingApi, streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import type { Budget, Usage } from '../agent/budget.ts';
-import type { AgentContext } from '../agent/context.ts';
+import { type RunLimits, runOptions } from '../agent/context.ts';
 import type { Assistant } from '../agent/mastra.ts';
 import { type RelayResult, relay } from '../agent/relay.ts';
 import type { Run, Runs } from '../agent/runs.ts';
@@ -17,9 +16,7 @@ import { internalError } from './error-handler.ts';
 import { fromPublicId, newThreadId, toPublicId } from './ids.ts';
 import { jsonBody, query } from './validate.ts';
 
-export interface AgentLimits {
-  maxSteps: number;
-  maxOutputTokens: number;
+export interface AgentLimits extends RunLimits {
   runTimeoutMs: number;
 }
 
@@ -120,23 +117,6 @@ export function createAgentRoutes({
     const thread = await (await memory()).getThreadById({ threadId: id });
     if (!thread || thread.resourceId !== userId) throw threadNotFound(id);
     return thread;
-  }
-
-  function requestContext(user: AgentContext) {
-    const context = new RequestContext<AgentContext>();
-    context.set('userId', user.userId);
-    context.set('notes', user.notes);
-    return context;
-  }
-
-  function execution(user: AgentContext, threadId: string, signal: AbortSignal) {
-    return {
-      memory: { thread: threadId, resource: user.userId },
-      requestContext: requestContext(user),
-      maxSteps: limits.maxSteps,
-      modelSettings: { maxOutputTokens: limits.maxOutputTokens },
-      abortSignal: signal,
-    };
   }
 
   function failure(result: RelayResult, requestId: string, timedOut: boolean): ProblemError {
@@ -281,7 +261,10 @@ export function createAgentRoutes({
     await budget.check(user.userId);
     const run = await runs.start(user.userId, thread.id);
     return streamRun(c, run, (signal) =>
-      agent.stream(content, { runId: run.id, ...execution(user, thread.id, signal) }),
+      agent.stream(content, {
+        runId: run.id,
+        ...runOptions({ context: user, threadId: thread.id, limits, abortSignal: signal }),
+      }),
     );
   });
 
@@ -300,7 +283,11 @@ export function createAgentRoutes({
       );
     }
     return streamRun(c, run, (signal) => {
-      const options = { runId: run.id, toolCallId, ...execution(user, run.threadId, signal) };
+      const options = {
+        runId: run.id,
+        toolCallId,
+        ...runOptions({ context: user, threadId: run.threadId, limits, abortSignal: signal }),
+      };
       return approved
         ? agent.approveToolCall(options)
         : agent.declineToolCall({ ...options, ...(reason ? { reason } : {}) });

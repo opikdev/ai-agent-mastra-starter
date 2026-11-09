@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { cases } from '../../evals/cases.ts';
 import { runCases } from '../../evals/run.ts';
+import { loadConfig } from '../../src/config.ts';
 import type { Reply } from '../fake-anthropic.ts';
 import { fakeAnthropic } from '../helpers.ts';
+
+const config = loadConfig({
+  DATABASE_URL: 'postgres://unused@localhost/unused',
+  NOTES_API_URL: 'http://notes.eval',
+  ANTHROPIC_API_KEY: 'test-anthropic-key',
+  GUARDRAIL_MODEL: 'off',
+});
 
 /** What a good model does in each case, in the same order as evals/cases.ts. */
 const golden: Reply[][] = [
@@ -47,8 +55,7 @@ describe('evals', () => {
     const fake = await fakeAnthropic();
     fake.replies.splice(0, fake.replies.length, ...golden.flat());
     const report = await runCases({
-      model: 'anthropic/claude-sonnet-5-5',
-      guardrailModel: 'off',
+      config,
       cases,
     });
     expect(report.results.filter((result) => !result.passed)).toEqual([]);
@@ -61,8 +68,7 @@ describe('evals', () => {
       tool: { name: 'deleteNote', input: { id: 'note_0_0' } },
     });
     const report = await runCases({
-      model: 'anthropic/claude-sonnet-5-5',
-      guardrailModel: 'off',
+      config,
       cases: [cases[5] as (typeof cases)[number]],
     });
     expect(report.results[0]).toMatchObject({
@@ -70,5 +76,15 @@ describe('evals', () => {
       failedGates: ['check-called-tool', 'check-did-not-call'],
     });
     expect(report.passRate).toBe(0);
+  });
+
+  it('runs the agent with the same limits as the API', async () => {
+    const fake = await fakeAnthropic();
+    fake.replies.splice(0, fake.replies.length, { text: 'Hello.' });
+    const smallTalk = cases.filter(
+      (testCase) => testCase.name === 'answers small talk without tools',
+    );
+    await runCases({ config: { ...config, AGENT_MAX_OUTPUT_TOKENS: 1234 }, cases: smallTalk });
+    expect(fake.requests.at(-1)).toMatchObject({ max_tokens: 1234 });
   });
 });

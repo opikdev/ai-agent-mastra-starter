@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - `pnpm typecheck` now checks `evals/`.
 - A model provider failure no longer logs the whole prompt. Errors in the app and Mastra logs keep only their type, message, stack, cause, and HTTP facts, and Mastra never logs at `debug`, which includes model text and tool results.
+- Evals run with the configured `AGENT_MAX_STEPS`, `AGENT_MAX_OUTPUT_TOKENS`, and `AGENT_MEMORY_MESSAGES`, through the same `runOptions()` as the API, instead of their own hardcoded options.
 
 ## [0.1.0] - 2026-11-09
 

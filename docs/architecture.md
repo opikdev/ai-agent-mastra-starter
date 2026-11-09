@@ -24,7 +24,7 @@ An approval resumes the same run from its Postgres snapshot, so it works after a
 | `src/config.ts` | Parses and validates the environment |
 | `src/http/` | Auth, rate limits, validation, and the routes |
 | `src/agent/notes-assistant.ts` | The agent: instructions, model, tools, memory, and guardrails |
-| `src/agent/context.ts` | What every agent call carries: the user ID and their notes client |
+| `src/agent/context.ts` | What every agent call carries, and `runOptions()`, which the API and the evals both call |
 | `src/agent/tools.ts` | The notes tools |
 | `src/agent/mastra.ts` | Mastra wiring: Postgres storage, logs, and tracing |
 | `src/agent/runs.ts` | Run rows: one open run per thread, approvals, and stale runs |
