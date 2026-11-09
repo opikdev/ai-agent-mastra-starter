@@ -32,11 +32,26 @@ type EvalConfig = Pick<
 interface RunOptions {
   config: EvalConfig;
   cases: EvalCase[];
+  beforeCase?: (testCase: EvalCase) => void;
   onResult?: (result: CaseResult) => void;
 }
 
+/** IDs come from the case name, so reordering or adding cases never changes them. */
+export function caseKey(name: string): string {
+  return name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-');
+}
+
+export function noteId(caseName: string, position: number): string {
+  return `note_${caseKey(caseName)}_${position}`;
+}
+
 /** Runs each case against the real agent, with a fake notes API seeded for that case. */
-export async function runCases({ config, cases, onResult }: RunOptions): Promise<EvalReport> {
+export async function runCases({
+  config,
+  cases,
+  beforeCase,
+  onResult,
+}: RunOptions): Promise<EvalReport> {
   const assistant = createNotesAssistant({
     model: config.AGENT_MODEL,
     guardrailModel: config.GUARDRAIL_MODEL,
@@ -55,14 +70,15 @@ export async function runCases({ config, cases, onResult }: RunOptions): Promise
   const notesApi = createFakeNotesApi();
   const results: CaseResult[] = [];
 
-  for (const [index, testCase] of cases.entries()) {
-    const userId = `usr_eval_${index}`;
-    const token = `eval-token-${index}`;
+  for (const testCase of cases) {
+    const key = caseKey(testCase.name);
+    const userId = `usr_eval_${key}`;
+    const token = `eval-token-${key}`;
     notesApi.addUser(userId, token);
     notesApi.notes.set(
       userId,
       testCase.notes.map((note, position) => ({
-        id: `note_${index}_${position}`,
+        id: noteId(testCase.name, position),
         ...note,
         version: 1,
         createdAt: '2026-11-01T00:00:00.000Z',
@@ -77,10 +93,11 @@ export async function runCases({ config, cases, onResult }: RunOptions): Promise
     });
     const { requestContext, ...targetOptions } = runOptions({
       context: { userId, notes },
-      threadId: `thr_eval_${index}`,
+      threadId: `thr_eval_${key}`,
       limits,
     });
 
+    beforeCase?.(testCase);
     const outcome = await runEvals({
       target: agent,
       // runEvals types each item's request context as untyped.

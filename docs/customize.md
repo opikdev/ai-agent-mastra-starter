@@ -9,7 +9,7 @@ Claude 5.5 models reject `temperature`, `top_p`, `top_k`, a forced `tool_choice`
 ## Change what the agent does
 
 1. Edit `instructions` in `src/agent/notes-assistant.ts`.
-2. Add or change eval cases in `evals/cases.ts`, and their golden replies in `test/unit/evals.test.ts`.
+2. Add or change eval cases in `evals/cases.ts`, and their golden replies, by case name, in `test/unit/evals.test.ts`.
 3. Run `pnpm verify`, then `pnpm eval`.
 
 ## Add a tool
