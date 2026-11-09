@@ -19,6 +19,17 @@ import { ProblemError } from './platform/problem.ts';
 
 const maxBodyBytes = 64 * 1024;
 
+/** Every response header a browser client may need to read. */
+const exposedHeaders = [
+  'X-Request-Id',
+  'Location',
+  'Retry-After',
+  'RateLimit-Limit',
+  'RateLimit-Remaining',
+  'RateLimit-Reset',
+  'WWW-Authenticate',
+];
+
 export interface AppDependencies {
   config: Config;
   db: Db;
@@ -56,7 +67,7 @@ export function createApp({
   });
   app.use(secureHeaders());
   if (config.CORS_ORIGINS.length > 0) {
-    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS }));
+    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS, exposeHeaders: exposedHeaders }));
   }
   app.use(
     '/v1/*',

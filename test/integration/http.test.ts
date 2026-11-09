@@ -23,6 +23,28 @@ describe('http', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
   });
 
+  it('lets browsers read the request ID, location, and rate limit headers', async () => {
+    const user = stack.signUp();
+    const response = await user.request('/v1/threads', {
+      method: 'POST',
+      json: {},
+      headers: { Origin: 'https://app.example.com' },
+    });
+    const exposed = response.headers.get('access-control-expose-headers')?.split(',') ?? [];
+    expect(exposed.map((header) => header.trim().toLowerCase()).sort()).toEqual([
+      'location',
+      'ratelimit-limit',
+      'ratelimit-remaining',
+      'ratelimit-reset',
+      'retry-after',
+      'www-authenticate',
+      'x-request-id',
+    ]);
+    for (const header of ['x-request-id', 'location', 'ratelimit-limit', 'ratelimit-reset']) {
+      expect(response.headers.get(header), header).toBeTruthy();
+    }
+  });
+
   it('rejects a body over 64 KiB', async () => {
     const user = stack.signUp();
     const response = await user.request('/v1/threads', {

@@ -24,7 +24,7 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `APPROVAL_TTL_HOURS` | `24` | Hours an approval may wait before its run fails and the thread unlocks |
 | `RATE_LIMIT_PER_MINUTE` | `300` | Requests per IP per minute |
 | `AGENT_RATE_LIMIT_PER_MINUTE` | `20` | Messages and approvals per user per minute |
-| `CORS_ORIGINS` | None | Comma-separated browser origins |
+| `CORS_ORIGINS` | None | Comma-separated browser origins. They can read `X-Request-Id`, `Location`, `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `WWW-Authenticate` |
 | `TRUST_PROXY_HOPS` | `0` | Proxies in front of the server that append to `X-Forwarded-For`. See [Client IPs](#client-ips) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | None | OTLP over HTTP collector, such as `http://collector:4318` |
 | `OTEL_SERVICE_NAME` | `ai-agent-mastra-starter` | Service name on traces |
