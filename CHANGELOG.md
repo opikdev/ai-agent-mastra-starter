@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- `pnpm typecheck` now checks `evals/`.
+
 ## [0.1.0] - 2026-11-09
 
 ### Added

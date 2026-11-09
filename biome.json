@@ -6,15 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**",
-      "!migrations/meta",
-      "!openapi.json",
-      "!coverage",
-      "!renovate.json",
-      "!.mcp.json",
-      "!**/*.md"
-    ]
+    "includes": ["**", "!migrations/meta", "!coverage", "!renovate.json", "!.mcp.json", "!**/*.md"]
   },
   "formatter": {
     "indentStyle": "space",
