@@ -29,7 +29,7 @@ Common types are `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, and `chore`.
 
 ## Change shared files
 
-Files listed in `.baseline.sha256` come from [opikdev/starters](https://github.com/opikdev/starters) and fail CI if edited here. Change them in `base/` in that repo instead.
+If this repo has a `.baseline.sha256` file, the files it lists come from [opikdev/starters](https://github.com/opikdev/starters) and fail CI if edited here. Change them in `base/` in that repo instead.
 
 ## Follow the code of conduct
 
