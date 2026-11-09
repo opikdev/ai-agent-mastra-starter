@@ -1,0 +1,157 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
+
+describe('auth', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack();
+  });
+  afterAll(() => stack.close());
+
+  it.each([
+    ['no header', {}],
+    ['another scheme', { Authorization: 'Basic abc' }],
+    ['an extra part', { Authorization: 'Bearer a b' }],
+    ['a token the notes API rejects', { Authorization: 'Bearer nope' }],
+    ['a very long token', { Authorization: `Bearer ${'x'.repeat(513)}` }],
+  ])('rejects %s with 401', async (_label, headers) => {
+    const response = await stack.app.request('/v1/threads', {
+      headers: { 'X-Forwarded-For': 'auth-test', ...headers },
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toBe('Bearer');
+    expect((await json(response)).type).toBe('urn:problem:unauthorized');
+  });
+
+  it('returns 503 when the notes API can’t confirm the token', async () => {
+    const user = stack.signUp();
+    stack.notesApi.failNext(500);
+    const response = await user.request('/v1/threads');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('5');
+  });
+
+  it('checks each token with the notes API once, then caches it', async () => {
+    const user = stack.signUp();
+    const before = stack.notesApi.requests.length;
+    await user.request('/v1/threads');
+    await user.request('/v1/threads');
+    const checks = stack.notesApi.requests
+      .slice(before)
+      .filter((request) => new URL(request.url).pathname === '/v1/users/me');
+    expect(checks).toHaveLength(1);
+  });
+
+  it('answers health checks without a token', async () => {
+    expect(await json(await stack.app.request('/healthz'))).toEqual({ status: 'ok' });
+    expect(await json(await stack.app.request('/readyz'))).toEqual({ status: 'ok' });
+  });
+
+  it('returns Problem Details for an unknown route', async () => {
+    const response = await stack.app.request('/nope');
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).toBe('application/problem+json');
+  });
+});
+
+describe('budgets and rate limits', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack({ DAILY_TOKEN_BUDGET: '200', AGENT_RATE_LIMIT_PER_MINUTE: '3' });
+  });
+  afterAll(() => stack.close());
+
+  it('refuses new runs once the day’s budget is spent', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    await user.say(thread.id, 'one');
+    await user.say(thread.id, 'two');
+    const response = await user.request(`/v1/threads/${thread.id}/messages`, {
+      method: 'POST',
+      json: { content: 'three' },
+    });
+    expect(response.status).toBe(429);
+    expect((await json(response)).type).toBe('urn:problem:budget-exceeded');
+    expect(Number(response.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(await (await user.request('/v1/usage')).json()).toEqual({
+      inputTokens: 200,
+      outputTokens: 40,
+      dailyBudget: 200,
+      remaining: 0,
+    });
+  });
+
+  it('keeps budgets per user', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    expect(eventsOf(await user.say(thread.id, 'hi'), 'done')[0].status).toBe('completed');
+  });
+
+  it('limits agent requests per user per minute', async () => {
+    const user = stack.signUp();
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const response = await user.request(
+        '/v1/threads/thr_00000000000000000000000000000000/messages',
+        {
+          method: 'POST',
+          json: { content: 'hi' },
+        },
+      );
+      statuses.push(response.status);
+      if (i === 3) expect(response.headers.get('retry-after')).toBeTruthy();
+    }
+    expect(statuses).toEqual([404, 404, 404, 429]);
+  });
+});
+
+describe('failures', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack();
+  });
+  afterAll(() => stack.close());
+
+  it('reports a model provider failure as an error event', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply({ status: 400, error: 'invalid request' });
+    const events = await user.say(thread.id, 'hi');
+    expect(eventsOf(events, 'error')[0]).toMatchObject({
+      type: 'urn:problem:service-unavailable',
+      status: 503,
+    });
+    expect(eventsOf(events, 'done')[0].status).toBe('failed');
+    const next = await user.say(thread.id, 'again');
+    expect(eventsOf(next, 'done')[0].status).toBe('completed');
+  });
+
+  it('gives a notes API failure back to the model as data', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply({ tool: { name: 'getNote', input: { id: 'note_404' } } }, { text: 'Not found.' });
+    const events = await user.say(thread.id, 'Open note_404');
+    expect(eventsOf(events, 'tool-result')[0].result).toEqual({
+      error: 'Note note_404 does not exist.',
+    });
+    expect(eventsOf(events, 'done')[0].status).toBe('completed');
+  });
+});
+
+describe('timeouts', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack({ AGENT_RUN_TIMEOUT_MS: '300' });
+  });
+  afterAll(() => stack.close());
+
+  it('stops a run that takes too long', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.anthropic.delayMs = 1000;
+    const events = await user.say(thread.id, 'hi');
+    stack.anthropic.delayMs = 0;
+    expect(eventsOf(events, 'error')[0].detail).toContain('0.3 seconds');
+    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+  });
+});

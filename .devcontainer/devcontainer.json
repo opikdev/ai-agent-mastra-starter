@@ -1,0 +1,9 @@
+{
+  "name": "ai-agent-mastra-starter",
+  "dockerComposeFile": ["../compose.yaml", "compose.yaml"],
+  "service": "dev",
+  "runServices": ["db", "migrate", "notes-api"],
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [3000, 3100],
+  "postCreateCommand": "apt-get update && apt-get install --yes --no-install-recommends jq && npm install --global pnpm@12.18.0 && pnpm install && (test -f .env || cp .env.example .env)"
+}

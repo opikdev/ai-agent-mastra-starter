@@ -1,0 +1,52 @@
+# Customize
+
+## Change the model
+
+Set `AGENT_MODEL` to any [Mastra model ID](https://mastra.ai/models), such as `anthropic/claude-opus-5-5`, and set that provider's API key. Run `pnpm eval` afterwards to check the agent still behaves.
+
+Claude 5.5 models reject `temperature`, `top_p`, `top_k`, a forced `tool_choice`, and an assistant prefill. Don't add them in `modelSettings` or `providerOptions`.
+
+## Change what the agent does
+
+1. Edit `instructions` in `src/agent/notes-assistant.ts`.
+2. Add or change eval cases in `evals/cases.ts`, and their golden replies in `test/unit/evals.test.ts`.
+3. Run `pnpm verify`, then `pnpm eval`.
+
+## Add a tool
+
+1. Add a client method for the outside call, with a timeout and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
+2. Add the tool to `src/agent/tools.ts` with `createTool`. Read the client from the request context, and wrap the call in `attempt()` so failures return `{ error }`.
+3. Set `requireApproval: true` if it changes or deletes data, or costs money.
+4. Add it to `notesTools`.
+5. Test it with a scripted reply in `test/integration/`, and add an eval case.
+
+## Connect your own API
+
+The agent trusts one API for identity and data. To use yours instead of the notes API:
+
+1. Point `NOTES_API_URL` at your API.
+2. Change `me()` in `src/notes/client.ts` to your "who am I" endpoint. It must reject bad tokens with 401.
+3. Replace the notes client methods and tools with your own.
+4. Replace the `notes-*` services in `compose.yaml` with your API, and update `test/fake-notes-api.ts`.
+
+Callers keep sending your API's tokens, and tools keep acting as the caller.
+
+If your users sign in with JWTs, you can verify them locally instead of calling `me()`. Use your identity provider's JWKS with a library such as `jose`, and keep forwarding the token to your API.
+
+## Remember facts about a user
+
+Mastra's [working memory](https://mastra.ai/docs/memory/working-memory) keeps a short profile per user across threads. Enable it in the `Memory` options in `src/agent/notes-assistant.ts`. The agent gets a tool to update it, which costs tokens on each turn.
+
+## Add tools from an MCP server
+
+Mastra's `MCPClient` from `@mastra/mcp` turns an MCP server's tools into agent tools. Pass the user's credentials per request, and mark tools that change data as needing approval. A shared credential would let every user act as that account.
+
+## Change the guardrails
+
+Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message.
+
+The prompt injection check fails open: if Haiku is down, messages go through. Approvals and acting as the user are the real defense, because they cap what an injected instruction can do.
+
+## Rename the project
+
+Create it with [pik](https://github.com/opikdev/pik): `pik new ai-agent-mastra-starter <name>`. It renames everything, installs dependencies, and formats the code.

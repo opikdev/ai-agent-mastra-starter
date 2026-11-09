@@ -1,0 +1,88 @@
+name: ai-agent-mastra-starter
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: agent_owner
+      POSTGRES_PASSWORD: agent_owner_dev_password
+      POSTGRES_DB: agent
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      # Over TCP, because the temporary server used during first-time setup only listens on a socket.
+      test: [CMD-SHELL, pg_isready -h 127.0.0.1 -U agent_owner -d agent]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  migrate:
+    build: .
+    command: [node, src/db/migrate.ts]
+    environment:
+      MIGRATION_DATABASE_URL: postgres://agent_owner:agent_owner_dev_password@db:5432/agent
+    depends_on:
+      db:
+        condition: service_healthy
+
+  agent:
+    build: .
+    environment:
+      DATABASE_URL: postgres://agent_app:agent_app_dev_password@db:5432/agent
+      NOTES_API_URL: http://notes-api:3000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      AGENT_MODEL: ${AGENT_MODEL:-anthropic/claude-sonnet-5-5}
+      GUARDRAIL_MODEL: ${GUARDRAIL_MODEL:-anthropic/claude-haiku-5-5}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - 127.0.0.1:${PORT:-3000}:3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      notes-api:
+        condition: service_healthy
+
+  # The app the agent acts on: api-hono-starter's notes API. Swap in your own API.
+  notes-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: notes_owner
+      POSTGRES_PASSWORD: notes_owner_dev_password
+      POSTGRES_DB: notes
+    volumes:
+      - notes-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -h 127.0.0.1 -U notes_owner -d notes]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  notes-migrate:
+    image: ghcr.io/opikdev/api-hono-starter:0.2.2
+    command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
+    environment:
+      MIGRATION_DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
+      SEED_DEMO_DATA: "true"
+    depends_on:
+      notes-db:
+        condition: service_healthy
+
+  notes-api:
+    image: ghcr.io/opikdev/api-hono-starter:0.2.2
+    environment:
+      DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
+    ports:
+      - 127.0.0.1:${NOTES_API_PORT:-3100}:3000
+    depends_on:
+      notes-migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:
+  notes-data:

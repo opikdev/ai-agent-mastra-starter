@@ -1,0 +1,32 @@
+name: Evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-24.04
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Skip without an API key
+        if: env.ANTHROPIC_API_KEY == ''
+        run: echo "::notice::Add an ANTHROPIC_API_KEY repository secret to run the live evals."
+      - if: env.ANTHROPIC_API_KEY != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.ANTHROPIC_API_KEY != ''
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - if: env.ANTHROPIC_API_KEY != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: pnpm
+      - if: env.ANTHROPIC_API_KEY != ''
+        run: pnpm install --frozen-lockfile
+      - if: env.ANTHROPIC_API_KEY != ''
+        run: pnpm eval

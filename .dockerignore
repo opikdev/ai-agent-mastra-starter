@@ -1,0 +1,8 @@
+.env
+.git
+.github
+.mastra
+coverage
+evals
+node_modules
+test

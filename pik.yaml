@@ -1,0 +1,48 @@
+schema: 1
+requires:
+  - name: docker
+  - name: node
+    version: 26.0.0
+  - name: pnpm
+    version: 12.0.0
+prompts:
+  - name: name
+    message: Project name, in kebab-case
+    pattern: ^[a-z][a-z0-9-]{0,49}$
+    default: "{{dir}}"
+  - name: owner
+    message: GitHub owner, for README links and code owners
+    pattern: ^[A-Za-z0-9-]{1,39}$
+    optional: true
+replace:
+  - from: "opikdev/ai-agent-mastra-starter\ncd ai-agent-mastra-starter\n"
+    to: "{{owner}}/{{name}}\ncd {{name}}\n"
+    files: [README.md]
+  - from: opikdev/ai-agent-mastra-starter
+    to: "{{owner}}/{{name}}"
+    files: [README.md]
+  - from: "@opikdev"
+    to: "@{{owner}}"
+    files: [.github/CODEOWNERS]
+  - from: ai-agent-mastra-starter
+    to: "{{name}}"
+    files:
+      - package.json
+      - compose.yaml
+      - .devcontainer/devcontainer.json
+      - src/config.ts
+      - docs/operations.md
+      - test/e2e/stack.test.ts
+      - test/integration/tracing.test.ts
+exclude:
+  - .baseline.sha256
+  - .github/workflows/baseline-check.yml
+setup:
+  - pnpm install
+  - pnpm exec biome format --write .
+next:
+  - export ANTHROPIC_API_KEY=<YOUR_KEY>
+  - docker compose up --build --wait agent
+check:
+  - pnpm verify
+  - pnpm test:e2e

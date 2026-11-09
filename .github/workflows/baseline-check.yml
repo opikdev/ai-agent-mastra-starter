@@ -1,0 +1,21 @@
+name: Baseline check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify baseline-managed files
+        run: |
+          if ! shasum -a 256 -c .baseline.sha256; then
+            echo "::error::Baseline-managed files changed. Edit base/ in opikdev/starters instead."
+            exit 1
+          fi

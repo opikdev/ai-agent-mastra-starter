@@ -1,0 +1,21 @@
+services:
+  dev:
+    image: node:26
+    command: sleep infinity
+    working_dir: /workspace
+    volumes:
+      # Relative to the repo root, because compose.yaml is the first file loaded.
+      - .:/workspace
+      - dev-node-modules:/workspace/node_modules
+    environment:
+      DATABASE_URL: postgres://agent_app:agent_app_dev_password@db:5432/agent
+      MIGRATION_DATABASE_URL: postgres://agent_owner:agent_owner_dev_password@db:5432/agent
+      NOTES_API_URL: http://notes-api:3000
+      # Tests create and drop their own database here, because there's no Docker inside the container.
+      TEST_DATABASE_URL: postgres://agent_owner:agent_owner_dev_password@db:5432/postgres
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  dev-node-modules:

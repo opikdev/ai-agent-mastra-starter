@@ -1,0 +1,13 @@
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'agent_app') THEN
+    CREATE ROLE agent_app LOGIN PASSWORD 'agent_app_dev_password';
+  END IF;
+END
+$$;
+CREATE SCHEMA IF NOT EXISTS mastra;
+GRANT USAGE ON SCHEMA public, mastra TO agent_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, mastra
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO agent_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, mastra
+  GRANT USAGE, SELECT ON SEQUENCES TO agent_app;
