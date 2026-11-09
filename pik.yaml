@@ -15,6 +15,9 @@ prompts:
     pattern: ^[A-Za-z0-9-]{1,39}$
     optional: true
 replace:
+  - from: '"extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"]'
+    to: '"extends": ["config:recommended"]'
+    files: [renovate.json]
   - from: "opikdev/ai-agent-mastra-starter\ncd ai-agent-mastra-starter\n"
     to: "{{owner}}/{{name}}\ncd {{name}}\n"
     files: [README.md]

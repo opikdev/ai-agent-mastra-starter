@@ -1,14 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "packageRules": [
-    {
-      "matchFileNames": [
-        ".github/workflows/baseline-check.yml",
-        ".github/workflows/repo-standards.yml",
-        ".github/workflows/secret-scan.yml"
-      ],
-      "enabled": false
-    }
-  ]
+  "extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"]
 }
