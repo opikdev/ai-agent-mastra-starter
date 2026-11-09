@@ -37,7 +37,7 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 2. Run `node src/db/migrate.ts` with `MIGRATION_DATABASE_URL` before each release. It applies Drizzle migrations and Mastra's own tables.
 3. Run the image with `DATABASE_URL` for `agent_app`. Check `/readyz` before sending traffic.
 
-The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag. Any number of instances can run at once: runs, approvals, budgets, and limits all live in Postgres.
+The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag, once `pnpm verify` and the end-to-end tests pass on that tag. Any number of instances can run at once: runs, approvals, budgets, and limits all live in Postgres.
 
 On `SIGTERM` or `SIGINT`, the server aborts its open runs, waits for their streams to close, and exits within 9 seconds. Each aborted run is saved as failed, and its client gets an `error` event and then `done` with status `aborted`, so the thread is free on the next instance. Give the container a stop grace period of at least 10 seconds, which is Docker's and Kubernetes' default.
 

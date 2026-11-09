@@ -20,6 +20,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Breaking:** `TRUST_PROXY` is replaced by `TRUST_PROXY_HOPS`, the number of proxies that append to `X-Forwarded-For`, 0 by default. The server refuses to start while `TRUST_PROXY` is set. Set `TRUST_PROXY_HOPS=1` for what `TRUST_PROXY=true` did.
 - Removed the unused `method-not-allowed` problem type. A test keeps `docs/errors.md` and the problem types in step.
 - `pnpm db:check`, and so `pnpm verify`, now fails locally on an edited migration, comparing with the merge base of `origin/main`, or `main`. Without either, it skips that check and says so.
+- The release workflow publishes the image only after `pnpm verify` and the end-to-end tests pass on the tag.
 
 ### Fixed
 
