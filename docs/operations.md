@@ -60,6 +60,11 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` to export spans for each agent run, model call
 
 Logs are JSON lines on stdout. Each request logs its method, path, status, duration, and request ID. Problem responses repeat the request ID, so users can quote it.
 
+Logs never hold prompts, replies, tool arguments or results, or tokens:
+
+- Errors are logged as their type, message, stack, cause, and, when present, `code`, `statusCode`, `url`, and `isRetryable`. Model provider errors carry the whole prompt, so nothing else is kept.
+- Mastra's own logs stay at `info` or above, even with `LOG_LEVEL=debug`, because its debug logs include model text and tool results.
+
 ## Clean up
 
 The server deletes expired rate limit rows every hour. `runs` and `token_usage` grow by one row per run and one per user per day. Delete old rows on a schedule if you don't need them.

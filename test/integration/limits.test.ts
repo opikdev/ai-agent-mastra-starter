@@ -112,16 +112,20 @@ describe('failures', () => {
   });
   afterAll(() => stack.close());
 
-  it('reports a model provider failure as an error event', async () => {
+  it('reports a model provider failure as an error event, and logs it without the prompt', async () => {
     const user = stack.signUp();
     const thread = await user.createThread();
     stack.reply({ status: 400, error: 'invalid request' });
-    const events = await user.say(thread.id, 'hi');
+    const events = await user.say(thread.id, 'my secret plans');
     expect(eventsOf(events, 'error')[0]).toMatchObject({
       type: 'urn:problem:service-unavailable',
       status: 503,
     });
     expect(eventsOf(events, 'done')[0].status).toBe('failed');
+    const failure = stack.logs.find((line) => line.includes('Agent run failed'));
+    expect(JSON.parse(failure ?? '{}').err).toMatchObject({ statusCode: 400, isRetryable: false });
+    expect(stack.logs.join('')).not.toContain('my secret plans');
+    expect(stack.logs.join('')).not.toContain('You are a notes assistant');
     const next = await user.say(thread.id, 'again');
     expect(eventsOf(next, 'done')[0].status).toBe('completed');
   });

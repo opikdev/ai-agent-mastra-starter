@@ -5,7 +5,7 @@ import { OtelExporter } from '@mastra/otel-exporter';
 import { PostgresStore } from '@mastra/pg';
 import type pg from 'pg';
 import type { Config } from '../config.ts';
-import { logRedactions } from '../platform/logger.ts';
+import { logRedactions, logSerializers } from '../platform/logger.ts';
 import { agentId, createNotesAssistant } from './notes-assistant.ts';
 
 /** Mastra keeps memory threads and approval snapshots in this schema. */
@@ -44,7 +44,9 @@ export function createStore(pool: pg.Pool, init = false) {
 }
 
 export function createMastra(config: AgentConfig, pool: pg.Pool) {
-  const level = config.LOG_LEVEL === 'silent' ? 'error' : config.LOG_LEVEL;
+  // Mastra's debug logs include model text and tool results, so they're never on.
+  const level =
+    config.LOG_LEVEL === 'warn' || config.LOG_LEVEL === 'error' ? config.LOG_LEVEL : 'info';
   const tracing = observability(config);
   const mastra = new Mastra({
     agents: {
@@ -58,7 +60,13 @@ export function createMastra(config: AgentConfig, pool: pg.Pool) {
     logger:
       config.LOG_LEVEL === 'silent'
         ? false
-        : new PinoLogger({ name: 'mastra', level, prettyPrint: false, redact: logRedactions }),
+        : new PinoLogger({
+            name: 'mastra',
+            level,
+            prettyPrint: false,
+            redact: logRedactions,
+            serializers: logSerializers,
+          }),
     ...(tracing ? { observability: tracing } : {}),
   });
   return { mastra, agent: mastra.getAgent(agentId) };

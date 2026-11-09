@@ -11,6 +11,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Fixed
 
 - `pnpm typecheck` now checks `evals/`.
+- A model provider failure no longer logs the whole prompt. Errors in the app and Mastra logs keep only their type, message, stack, cause, and HTTP facts, and Mastra never logs at `debug`, which includes model text and tool results.
 
 ## [0.1.0] - 2026-11-09
 
