@@ -1,16 +1,9 @@
-import type { RequestContext } from '@mastra/core/request-context';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { type NotesClient, UpstreamError } from '../notes/client.ts';
-import type { AgentContext } from './context.ts';
+import { UpstreamError } from '../notes/client.ts';
+import { agentContextSchema } from './context.ts';
 
 const previewLength = 200;
-
-function notesFrom(context: { requestContext?: RequestContext<unknown> } | undefined): NotesClient {
-  const notes = (context?.requestContext as RequestContext<AgentContext> | undefined)?.get('notes');
-  if (!notes) throw new Error('The agent ran without a notes client in its request context.');
-  return notes;
-}
 
 /** Upstream failures go back to the model as data, so it can explain or retry. Bugs still throw. */
 async function attempt<T>(run: () => Promise<T>): Promise<T | { error: string }> {
@@ -26,6 +19,7 @@ const noteId = z.string().min(1).max(100).describe('The note ID, such as note_01
 
 export const listNotes = createTool({
   id: 'list-notes',
+  requestContextSchema: agentContextSchema,
   description:
     'Lists the user’s notes, newest first, with a preview of each body. Pass nextCursor from a result to get the next page.',
   inputSchema: z.object({
@@ -34,7 +28,7 @@ export const listNotes = createTool({
   }),
   execute: async ({ limit, cursor }, context) =>
     attempt(async () => {
-      const page = await notesFrom(context).list({ limit, cursor });
+      const page = await context.requestContext.get('notes').list({ limit, cursor });
       return {
         notes: page.data.map(({ id, title, body, updatedAt }) => ({
           id,
@@ -49,23 +43,27 @@ export const listNotes = createTool({
 
 export const getNote = createTool({
   id: 'get-note',
+  requestContextSchema: agentContextSchema,
   description: 'Gets one note with its full body.',
   inputSchema: z.object({ id: noteId }),
-  execute: async ({ id }, context) => attempt(() => notesFrom(context).get(id)),
+  execute: async ({ id }, context) => attempt(() => context.requestContext.get('notes').get(id)),
 });
 
 export const createNote = createTool({
   id: 'create-note',
+  requestContextSchema: agentContextSchema,
   description: 'Creates a note. Each call creates a new note, so call it once per note.',
   inputSchema: z.object({
     title: z.string().trim().min(1).max(200).describe('Short title.'),
     body: z.string().max(10_000).default('').describe('Note text.'),
   }),
-  execute: async (input, context) => attempt(() => notesFrom(context).create(input)),
+  execute: async (input, context) =>
+    attempt(() => context.requestContext.get('notes').create(input)),
 });
 
 export const updateNote = createTool({
   id: 'update-note',
+  requestContextSchema: agentContextSchema,
   description:
     'Changes a note’s title, body, or both. The user must approve the change before it runs.',
   inputSchema: z.object({
@@ -75,17 +73,18 @@ export const updateNote = createTool({
   }),
   requireApproval: true,
   execute: async ({ id, ...changes }, context) =>
-    attempt(() => notesFrom(context).update(id, changes)),
+    attempt(() => context.requestContext.get('notes').update(id, changes)),
 });
 
 export const deleteNote = createTool({
   id: 'delete-note',
+  requestContextSchema: agentContextSchema,
   description: 'Deletes a note for good. The user must approve it before it runs.',
   inputSchema: z.object({ id: noteId }),
   requireApproval: true,
   execute: async ({ id }, context) =>
     attempt(async () => {
-      await notesFrom(context).remove(id);
+      await context.requestContext.get('notes').remove(id);
       return { deleted: id };
     }),
 });

@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - The agent layer no longer imports from the HTTP layer. `ProblemError` and the logger moved to `src/platform/`, `AgentContext` moved to `src/agent/context.ts`, and a test enforces the import directions.
+- Tools and the agent validate the request context with `requestContextSchema`, and the routes use Mastra's own thread and message types instead of casts.
 
 ### Fixed
 

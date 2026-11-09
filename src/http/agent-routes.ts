@@ -1,3 +1,4 @@
+import type { MastraDBMessage, StorageThreadType } from '@mastra/core/memory';
 import { RequestContext } from '@mastra/core/request-context';
 import type { ChunkType } from '@mastra/core/stream';
 import type { Context, MiddlewareHandler } from 'hono';
@@ -58,15 +59,7 @@ const approvalSchema = z.strictObject({
   reason: z.string().trim().min(1).max(1000).optional(),
 });
 
-interface StoredThread {
-  id: string;
-  resourceId: string;
-  title?: string | undefined;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-function presentThread(thread: StoredThread) {
+function presentThread(thread: StorageThreadType) {
   return {
     id: thread.id,
     title: thread.title || null,
@@ -75,27 +68,11 @@ function presentThread(thread: StoredThread) {
   };
 }
 
-interface StoredPart {
-  type: string;
-  text?: string;
-  toolInvocation?: { toolCallId: string; toolName: string; args: unknown; result?: unknown };
-}
-
-interface StoredMessage {
-  id: string;
-  role: string;
-  createdAt: Date;
-  content: { parts?: StoredPart[] };
-}
-
-function presentMessage(message: StoredMessage) {
-  const parts = message.content.parts ?? [];
-  const text = parts
-    .filter((part) => part.type === 'text')
-    .map((part) => part.text ?? '')
-    .join('');
+function presentMessage(message: MastraDBMessage) {
+  const { parts } = message.content;
+  const text = parts.map((part) => (part.type === 'text' ? part.text : '')).join('');
   const toolCalls = parts.flatMap((part) =>
-    part.type === 'tool-invocation' && part.toolInvocation
+    part.type === 'tool-invocation'
       ? [
           {
             toolCallId: part.toolInvocation.toolCallId,
@@ -138,7 +115,7 @@ export function createAgentRoutes({
   }
 
   /** Someone else's thread looks exactly like one that doesn't exist. */
-  async function ownThread(userId: string, id: string): Promise<StoredThread> {
+  async function ownThread(userId: string, id: string): Promise<StorageThreadType> {
     if (!threadIdPattern.test(id)) throw threadNotFound(id);
     const thread = await (await memory()).getThreadById({ threadId: id });
     if (!thread || thread.resourceId !== userId) throw threadNotFound(id);
@@ -285,7 +262,7 @@ export function createAgentRoutes({
     });
     return c.json({
       ...presentThread(thread),
-      messages: (messages as StoredMessage[]).map(presentMessage),
+      messages: messages.map(presentMessage),
     });
   });
 

@@ -15,7 +15,7 @@ Claude 5.5 models reject `temperature`, `top_p`, `top_k`, a forced `tool_choice`
 ## Add a tool
 
 1. Add a client method for the outside call, with a timeout and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
-2. Add the tool to `src/agent/tools.ts` with `createTool`. Read the client from the request context, and wrap the call in `attempt()` so failures return `{ error }`.
+2. Add the tool to `src/agent/tools.ts` with `createTool` and `requestContextSchema: agentContextSchema`. Read the client with `context.requestContext.get('notes')`, and wrap the call in `attempt()` so failures return `{ error }`.
 3. Set `requireApproval: true` if it changes or deletes data, or costs money.
 4. Add it to `notesTools`.
 5. Test it with a scripted reply in `test/integration/`, and add an eval case.
@@ -46,6 +46,14 @@ Mastra's `MCPClient` from `@mastra/mcp` turns an MCP server's tools into agent t
 Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message.
 
 The prompt injection check fails open: if Haiku is down, messages go through. Approvals and acting as the user are the real defense, because they cap what an injected instruction can do.
+
+## Upgrade Mastra
+
+`@mastra/core` is pinned to an exact version, because `src/agent/relay.ts` and the evals rely on details that can change in any release: stream chunk shapes, the repeated usage after a resumed approval, and eval results keyed by check type. The other `@mastra/*` packages follow it.
+
+1. Bump `@mastra/core` and the other `@mastra/*` packages together.
+2. Read Mastra's changelog for stream, approval, memory, and storage changes.
+3. Run `pnpm verify` and `pnpm test:e2e`, then `pnpm eval`.
 
 ## Rename the project
 

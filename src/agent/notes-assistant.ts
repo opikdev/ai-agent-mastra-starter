@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { PromptInjectionDetector, UnicodeNormalizer } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
+import { agentContextSchema } from './context.ts';
 import { notesTools } from './tools.ts';
 
 export const agentId = 'notes-assistant';
@@ -50,5 +51,6 @@ export function createNotesAssistant({
     tools: notesTools,
     memory: new Memory({ options: { lastMessages: memoryMessages, generateTitle: false } }),
     inputProcessors: guardrails(guardrailModel),
+    requestContextSchema: agentContextSchema,
   });
 }
