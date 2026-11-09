@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - Streams send a `: keepalive` comment every 10 seconds, so proxies don't drop them while the model is slow.
@@ -21,6 +23,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Removed the unused `method-not-allowed` problem type. A test keeps `docs/errors.md` and the problem types in step.
 - `pnpm db:check`, and so `pnpm verify`, now fails locally on an edited migration, comparing with the merge base of `origin/main`, or `main`. Without either, it skips that check and says so.
 - The release workflow publishes the image only after `pnpm verify` and the end-to-end tests pass on the tag.
+- The agent harness is v0.3.0. Its check also fails when the harness workflow or pre-commit hook is missing or no longer runs the check.
+- `renovate.json` belongs to the project and extends the shared baseline preset. Generated projects extend only `config:recommended`.
 
 ### Fixed
 
