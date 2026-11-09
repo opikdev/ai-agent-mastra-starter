@@ -19,19 +19,25 @@ describe('loadConfig', () => {
       DATABASE_POOL_MAX: 10,
       RUN_RETENTION_DAYS: 30,
       APPROVAL_TTL_HOURS: 24,
-      TRUST_PROXY: false,
+      TRUST_PROXY_HOPS: 0,
       CORS_ORIGINS: [],
     });
   });
 
-  it('parses lists and flags', () => {
+  it('parses lists and proxy hops', () => {
     const config = loadConfig({
       ...required,
       CORS_ORIGINS: 'https://a.test, https://b.test',
-      TRUST_PROXY: 'true',
+      TRUST_PROXY_HOPS: '2',
     });
     expect(config.CORS_ORIGINS).toEqual(['https://a.test', 'https://b.test']);
-    expect(config.TRUST_PROXY).toBe(true);
+    expect(config.TRUST_PROXY_HOPS).toBe(2);
+  });
+
+  it.each(['true', 'false', ''])('tells you how to replace TRUST_PROXY=%s', (value) => {
+    expect(() => loadConfig({ ...required, TRUST_PROXY: value })).toThrow(
+      'TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior.',
+    );
   });
 
   it('parses the pool size', () => {
@@ -60,7 +66,9 @@ describe('loadConfig', () => {
     ['ANTHROPIC_API_KEY', { ...required, ANTHROPIC_API_KEY: undefined }],
     ['AGENT_MAX_STEPS', { ...required, AGENT_MAX_STEPS: '0' }],
     ['APPROVAL_TTL_HOURS', { ...required, APPROVAL_TTL_HOURS: '0' }],
-    ['TRUST_PROXY', { ...required, TRUST_PROXY: 'yes' }],
+    ['TRUST_PROXY_HOPS', { ...required, TRUST_PROXY_HOPS: '-1' }],
+    ['TRUST_PROXY_HOPS', { ...required, TRUST_PROXY_HOPS: '1.5' }],
+    ['TRUST_PROXY_HOPS', { ...required, TRUST_PROXY_HOPS: 'true' }],
   ])('names %s when it is missing or invalid', (name, env) => {
     expect(() => loadConfig(env)).toThrow(name);
   });

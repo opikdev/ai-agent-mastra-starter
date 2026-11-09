@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { inject } from 'vitest';
 import { createMastra } from '../src/agent/mastra.ts';
 import { createApp } from '../src/app.ts';
@@ -70,6 +70,12 @@ export interface TestStack {
   close: () => Promise<void>;
 }
 
+/** A random documentation IPv6 address, so each test client gets its own rate limit. */
+export function uniqueIp(): string {
+  const groups = randomBytes(12).toString('hex').match(/.{4}/g) as string[];
+  return `2001:db8:${groups.join(':')}`;
+}
+
 let shared: Promise<FakeAnthropic> | undefined;
 
 /** Mastra caches its Anthropic provider, so every stack in a test file shares one fake. */
@@ -93,7 +99,7 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     NOTES_API_URL: 'http://notes.test',
     GUARDRAIL_MODEL: 'off',
     LOG_LEVEL: 'silent',
-    TRUST_PROXY: 'true',
+    TRUST_PROXY_HOPS: '1',
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     ...env,
   });
@@ -123,7 +129,7 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
   function signUp(): TestUser {
     const id = `usr_${randomUUID().replaceAll('-', '')}`;
     const token = `token-${randomUUID()}`;
-    const ip = `test-${randomUUID()}`;
+    const ip = uniqueIp();
     notesApi.addUser(id, token);
     const request: TestUser['request'] = (path, { json, headers, ...init } = {}) =>
       Promise.resolve(

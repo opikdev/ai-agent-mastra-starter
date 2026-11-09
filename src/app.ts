@@ -37,7 +37,7 @@ export function createApp({
   shutdownSignal = new AbortController().signal,
 }: AppDependencies) {
   const app = new Hono<AppEnv>();
-  const trustProxy = config.TRUST_PROXY;
+  const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
   app.use(requestId());
   app.use(async (c, next) => {
@@ -72,7 +72,7 @@ export function createApp({
   );
   app.use(
     '/v1/*',
-    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustProxy }),
+    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustedProxyHops }),
   );
 
   const agentRoutes = createAgentRoutes({
@@ -95,7 +95,7 @@ export function createApp({
       name: 'agent',
       limit: config.AGENT_RATE_LIMIT_PER_MINUTE,
       perUser: true,
-      trustProxy,
+      trustedProxyHops,
     }),
     shutdownSignal,
   });

@@ -25,7 +25,7 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `RATE_LIMIT_PER_MINUTE` | `300` | Requests per IP per minute |
 | `AGENT_RATE_LIMIT_PER_MINUTE` | `20` | Messages and approvals per user per minute |
 | `CORS_ORIGINS` | None | Comma-separated browser origins |
-| `TRUST_PROXY` | `false` | Read the client IP from `X-Forwarded-For`. Only behind a proxy that sets it |
+| `TRUST_PROXY_HOPS` | `0` | Proxies in front of the server that append to `X-Forwarded-For`. See [Client IPs](#client-ips) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | None | OTLP over HTTP collector, such as `http://collector:4318` |
 | `OTEL_SERVICE_NAME` | `ai-agent-mastra-starter` | Service name on traces |
 | `PORT`, `LOG_LEVEL`, `DATABASE_STATEMENT_TIMEOUT_MS` | `3000`, `info`, `5000` | Server basics |
@@ -41,6 +41,17 @@ The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag. Any number
 On `SIGTERM` or `SIGINT`, the server aborts its open runs, waits for their streams to close, and exits within 9 seconds. Each aborted run is saved as failed, and its client gets an `error` event and then `done` with status `aborted`, so the thread is free on the next instance. Give the container a stop grace period of at least 10 seconds, which is Docker's and Kubernetes' default.
 
 Put the service behind TLS. Streams can last up to `AGENT_RUN_TIMEOUT_MS`, so set your proxy's read timeout above it, and turn off response buffering for `text/event-stream`. A keepalive comment every 10 seconds stops idle timeouts from cutting a stream short.
+
+## Client IPs
+
+The per-IP rate limit needs the client's real address. `TRUST_PROXY_HOPS` says where to find it:
+
+| Value | Client IP |
+|---|---|
+| `0` | The socket address. `X-Forwarded-For` is ignored, so clients can't spoof it |
+| `N` ≥ 1 | The Nth address from the right of `X-Forwarded-For`, with every header's values joined. If there are fewer than N, the leftmost |
+
+Set it to the number of proxies you run, such as `1` behind one load balancer. If the chosen entry is empty or isn't an IP address, the socket address is used. `TRUST_PROXY` was replaced: setting it stops startup, and `TRUST_PROXY_HOPS=1` does what `TRUST_PROXY=true` did.
 
 ## Costs
 

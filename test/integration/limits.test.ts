@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runs } from '../../src/db/schema.ts';
-import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
+import { eventsOf, json, startStack, type TestStack, uniqueIp } from '../helpers.ts';
 
 describe('auth', () => {
   let stack: TestStack;
@@ -18,7 +18,7 @@ describe('auth', () => {
     ['a very long token', { Authorization: `Bearer ${'x'.repeat(513)}` }],
   ])('rejects %s with 401', async (_label, headers) => {
     const response = await stack.app.request('/v1/threads', {
-      headers: { 'X-Forwarded-For': 'auth-test', ...headers },
+      headers: { 'X-Forwarded-For': uniqueIp(), ...headers },
     });
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toBe('Bearer');

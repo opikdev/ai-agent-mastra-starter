@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-const flag = z
-  .enum(['true', 'false'])
-  .default('false')
-  .transform((value) => value === 'true');
-
 const list = z
   .string()
   .default('')
@@ -38,7 +33,7 @@ const envSchema = z
     RUN_RETENTION_DAYS: positive(30),
     APPROVAL_TTL_HOURS: positive(24),
     CORS_ORIGINS: list,
-    TRUST_PROXY: flag,
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
     RATE_LIMIT_PER_MINUTE: positive(300),
     AGENT_RATE_LIMIT_PER_MINUTE: positive(20),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
@@ -57,6 +52,11 @@ const envSchema = z
 export type Config = z.infer<typeof envSchema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  if (env.TRUST_PROXY !== undefined) {
+    throw new Error(
+      'TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior.',
+    );
+  }
   const result = envSchema.safeParse(env);
   if (!result.success) {
     const fields = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Assistant } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createLogger } from '../../src/platform/logger.ts';
-import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
+import { eventsOf, json, startStack, type TestStack, uniqueIp } from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -17,7 +17,7 @@ describe('http', () => {
       headers: {
         Origin: 'https://app.example.com',
         'Access-Control-Request-Method': 'POST',
-        'X-Forwarded-For': 'cors-test',
+        'X-Forwarded-For': uniqueIp(),
       },
     });
     expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
@@ -52,7 +52,7 @@ describe('http', () => {
       headers: {
         Authorization: `Bearer ${user.token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'error-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: '{}',
     });

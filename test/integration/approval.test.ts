@@ -4,7 +4,14 @@ import { createMastra } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createDb, createPool } from '../../src/db/client.ts';
 import { createLogger } from '../../src/platform/logger.ts';
-import { eventsOf, readSse, startStack, type TestStack, type TestUser } from '../helpers.ts';
+import {
+  eventsOf,
+  readSse,
+  startStack,
+  type TestStack,
+  type TestUser,
+  uniqueIp,
+} from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -178,7 +185,7 @@ describe('tool approval', () => {
       headers: {
         Authorization: `Bearer ${user.token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'restart-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: JSON.stringify({ toolCallId: approval.toolCallId, approved: true }),
     });
