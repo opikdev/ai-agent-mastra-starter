@@ -40,6 +40,14 @@ describe('loadConfig', () => {
     );
   });
 
+  it.each(['debug', 'info', 'warn', 'error', 'silent'])('accepts LOG_LEVEL=%s', (level) => {
+    expect(loadConfig({ ...required, LOG_LEVEL: level }).LOG_LEVEL).toBe(level);
+  });
+
+  it.each(['trace', 'fatal', 'INFO'])('rejects LOG_LEVEL=%s', (level) => {
+    expect(() => loadConfig({ ...required, LOG_LEVEL: level })).toThrow(/LOG_LEVEL/);
+  });
+
   it('parses the pool size', () => {
     expect(loadConfig({ ...required, DATABASE_POOL_MAX: '25' }).DATABASE_POOL_MAX).toBe(25);
   });

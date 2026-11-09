@@ -28,7 +28,8 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `TRUST_PROXY_HOPS` | `0` | Proxies in front of the server that append to `X-Forwarded-For`. See [Client IPs](#client-ips) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | None | OTLP over HTTP collector, such as `http://collector:4318` |
 | `OTEL_SERVICE_NAME` | `ai-agent-mastra-starter` | Service name on traces |
-| `PORT`, `LOG_LEVEL`, `DATABASE_STATEMENT_TIMEOUT_MS` | `3000`, `info`, `5000` | Server basics |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`, or `silent` |
+| `PORT`, `DATABASE_STATEMENT_TIMEOUT_MS` | `3000`, `5000` | Server basics |
 
 ## Deploy
 
