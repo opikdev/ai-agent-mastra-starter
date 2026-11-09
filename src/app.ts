@@ -13,11 +13,22 @@ import { createRequireAuth } from './http/auth.ts';
 import type { AppEnv } from './http/env.ts';
 import { createErrorHandler, respond } from './http/error-handler.ts';
 import { createHealthRoutes } from './http/health.ts';
-import type { Logger } from './http/logger.ts';
-import { ProblemError } from './http/problem.ts';
 import { rateLimit } from './http/rate-limit.ts';
+import type { Logger } from './platform/logger.ts';
+import { ProblemError } from './platform/problem.ts';
 
 const maxBodyBytes = 64 * 1024;
+
+/** Every response header a browser client may need to read. */
+const exposedHeaders = [
+  'X-Request-Id',
+  'Location',
+  'Retry-After',
+  'RateLimit-Limit',
+  'RateLimit-Remaining',
+  'RateLimit-Reset',
+  'WWW-Authenticate',
+];
 
 export interface AppDependencies {
   config: Config;
@@ -25,11 +36,19 @@ export interface AppDependencies {
   logger: Logger;
   agent: Assistant;
   fetch?: typeof fetch;
+  shutdownSignal?: AbortSignal;
 }
 
-export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDependencies) {
+export function createApp({
+  config,
+  db,
+  logger,
+  agent,
+  fetch: fetcher,
+  shutdownSignal = new AbortController().signal,
+}: AppDependencies) {
   const app = new Hono<AppEnv>();
-  const trustProxy = config.TRUST_PROXY;
+  const trustedProxyHops = config.TRUST_PROXY_HOPS;
 
   app.use(requestId());
   app.use(async (c, next) => {
@@ -48,7 +67,7 @@ export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDepe
   });
   app.use(secureHeaders());
   if (config.CORS_ORIGINS.length > 0) {
-    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS }));
+    app.use('/v1/*', cors({ origin: config.CORS_ORIGINS, exposeHeaders: exposedHeaders }));
   }
   app.use(
     '/v1/*',
@@ -64,7 +83,7 @@ export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDepe
   );
   app.use(
     '/v1/*',
-    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustProxy }),
+    rateLimit({ db, name: 'global', limit: config.RATE_LIMIT_PER_MINUTE, trustedProxyHops }),
   );
 
   const agentRoutes = createAgentRoutes({
@@ -87,8 +106,9 @@ export function createApp({ config, db, logger, agent, fetch: fetcher }: AppDepe
       name: 'agent',
       limit: config.AGENT_RATE_LIMIT_PER_MINUTE,
       perUser: true,
-      trustProxy,
+      trustedProxyHops,
     }),
+    shutdownSignal,
   });
 
   app.route('/', createHealthRoutes(db));

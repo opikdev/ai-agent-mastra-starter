@@ -18,8 +18,7 @@ const config = loadConfig({
 
 console.log(`Running ${cases.length} cases against ${config.AGENT_MODEL}\n`);
 const report = await runCases({
-  model: config.AGENT_MODEL,
-  guardrailModel: config.GUARDRAIL_MODEL,
+  config,
   cases,
   onResult: ({ name, passed, failedGates }) => {
     console.log(

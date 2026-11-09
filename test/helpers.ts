@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { inject } from 'vitest';
 import { createMastra } from '../src/agent/mastra.ts';
 import { createApp } from '../src/app.ts';
 import { type Config, loadConfig } from '../src/config.ts';
 import { createDb, createPool, type Db } from '../src/db/client.ts';
-import { createLogger } from '../src/http/logger.ts';
+import { createLogger } from '../src/platform/logger.ts';
 import { type FakeAnthropic, type Reply, startFakeAnthropic } from './fake-anthropic.ts';
 import { createFakeNotesApi, type FakeNotesApi } from './fake-notes-api.ts';
 
@@ -63,9 +63,17 @@ export interface TestStack {
   db: Db;
   app: ReturnType<typeof createApp>;
   logs: string[];
+  /** Aborting it is what SIGTERM does to the real server. */
+  shutdown: AbortController;
   signUp: () => TestUser;
   reply: (...replies: Reply[]) => void;
   close: () => Promise<void>;
+}
+
+/** A random documentation IPv6 address, so each test client gets its own rate limit. */
+export function uniqueIp(): string {
+  const groups = randomBytes(12).toString('hex').match(/.{4}/g) as string[];
+  return `2001:db8:${groups.join(':')}`;
 }
 
 let shared: Promise<FakeAnthropic> | undefined;
@@ -91,11 +99,15 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     NOTES_API_URL: 'http://notes.test',
     GUARDRAIL_MODEL: 'off',
     LOG_LEVEL: 'silent',
-    TRUST_PROXY: 'true',
+    TRUST_PROXY_HOPS: '1',
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     ...env,
   });
-  const pool = createPool(config.DATABASE_URL, config.DATABASE_STATEMENT_TIMEOUT_MS);
+  const pool = createPool(
+    config.DATABASE_URL,
+    config.DATABASE_STATEMENT_TIMEOUT_MS,
+    config.DATABASE_POOL_MAX,
+  );
   const db = createDb(pool);
   const logs: string[] = [];
   const logger = createLogger(env.LOG_LEVEL ?? 'debug', {
@@ -104,12 +116,20 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     },
   });
   const { mastra, agent } = createMastra(config, pool);
-  const app = createApp({ config, db, logger, agent, fetch: notesApi.fetch });
+  const shutdown = new AbortController();
+  const app = createApp({
+    config,
+    db,
+    logger,
+    agent,
+    fetch: notesApi.fetch,
+    shutdownSignal: shutdown.signal,
+  });
 
   function signUp(): TestUser {
     const id = `usr_${randomUUID().replaceAll('-', '')}`;
     const token = `token-${randomUUID()}`;
-    const ip = `test-${randomUUID()}`;
+    const ip = uniqueIp();
     notesApi.addUser(id, token);
     const request: TestUser['request'] = (path, { json, headers, ...init } = {}) =>
       Promise.resolve(
@@ -151,6 +171,7 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     db,
     app,
     logs,
+    shutdown,
     signUp,
     reply: (...replies) => {
       anthropic.replies.push(...replies);

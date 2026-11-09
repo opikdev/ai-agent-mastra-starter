@@ -27,16 +27,18 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 | `tool-call` | `{ toolCallId, toolName, args }` | The model calls a tool |
 | `tool-result` | `{ toolCallId, toolName, result }` | A tool returns. A failure the model can act on is `{ error }` |
 | `tool-error` | `{ toolCallId, toolName, detail }` | A tool crashed. The model is told and may try another way |
-| `approval-required` | `{ runId, toolCallId, toolName, args }` | A tool waits for approval |
+| `approval-required` | `{ runId, toolCallId, toolName, args }` | A tool waits for approval. It comes just before `done` |
 | `blocked` | `{ reason }` | A guardrail blocked the message |
 | `error` | A Problem Details object | The run failed |
 | `done` | `{ runId, status, usage: { inputTokens, outputTokens } }` | Last, unless the client disconnected |
 
 `status` is `completed`, `awaiting_approval`, `blocked`, `failed`, or `aborted`.
 
+Every 10 seconds, the stream also sends a `: keepalive` comment, so proxies don't close it while the model thinks. SSE clients ignore comments.
+
 ## Approve a tool call
 
-When the stream ends with `awaiting_approval`, show the user `toolName` and `args`, then send the decision:
+When an `approval-required` event arrives, show the user `toolName` and `args`, then send the decision. The run is already saved as waiting, so you can send it right away, before `done` arrives:
 
 ```sh
 curl -N -X POST localhost:3000/v1/runs/$RUN_ID/approval -H "Authorization: Bearer $TOKEN" \
@@ -46,7 +48,7 @@ curl -N -X POST localhost:3000/v1/runs/$RUN_ID/approval -H "Authorization: Beare
 
 To decline, send `"approved": false` and an optional `reason`. The model sees the reason and answers the user.
 
-Until you decide, new messages on that thread return `409 approval-pending`. Each approval runs once: a second one returns `409 approval-not-pending`.
+Until you decide, new messages on that thread return `409 approval-pending`. An approval left for `APPROVAL_TTL_HOURS`, 24 by default, expires within the next hour: its run fails and the thread takes messages again. Each approval runs once: a second one returns `409 approval-not-pending`.
 
 ## Read the stream in TypeScript
 

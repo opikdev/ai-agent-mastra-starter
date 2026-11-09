@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-const flag = z
-  .enum(['true', 'false'])
-  .default('false')
-  .transform((value) => value === 'true');
-
 const list = z
   .string()
   .default('')
@@ -24,6 +19,7 @@ const envSchema = z
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
     DATABASE_URL: z.url(),
     DATABASE_STATEMENT_TIMEOUT_MS: positive(5000),
+    DATABASE_POOL_MAX: positive(10),
     NOTES_API_URL: z.url(),
     NOTES_API_TIMEOUT_MS: positive(5000),
     AGENT_MODEL: z.string().min(1).default('anthropic/claude-sonnet-5-5'),
@@ -34,8 +30,10 @@ const envSchema = z
     GUARDRAIL_MODEL: z.string().min(1).default('anthropic/claude-haiku-5-5'),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     DAILY_TOKEN_BUDGET: positive(500_000),
+    RUN_RETENTION_DAYS: positive(30),
+    APPROVAL_TTL_HOURS: positive(24),
     CORS_ORIGINS: list,
-    TRUST_PROXY: flag,
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
     RATE_LIMIT_PER_MINUTE: positive(300),
     AGENT_RATE_LIMIT_PER_MINUTE: positive(20),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
@@ -54,6 +52,11 @@ const envSchema = z
 export type Config = z.infer<typeof envSchema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  if (env.TRUST_PROXY !== undefined) {
+    throw new Error(
+      'TRUST_PROXY was replaced by TRUST_PROXY_HOPS. Set TRUST_PROXY_HOPS=1 for the old behavior.',
+    );
+  }
   const result = envSchema.safeParse(env);
   if (!result.success) {
     const fields = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);

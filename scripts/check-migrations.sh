@@ -9,10 +9,19 @@ if [[ $output != *'No schema changes'* ]]; then
 fi
 
 if [[ -n ${GITHUB_BASE_REF:-} ]]; then
-  edited=$(git diff --name-status "origin/$GITHUB_BASE_REF...HEAD" -- 'migrations/*.sql' | grep -v '^A' || true)
-  if [[ -n $edited ]]; then
-    echo "Migrations are append-only. Add a new one instead of changing these:" >&2
-    echo "$edited" >&2
-    exit 1
-  fi
+  base=origin/$GITHUB_BASE_REF
+elif git rev-parse --quiet --verify origin/main >/dev/null; then
+  base=origin/main
+elif git rev-parse --quiet --verify main >/dev/null; then
+  base=main
+else
+  echo 'Skipped the append-only migration check: there is no origin/main or main to compare with.'
+  exit 0
+fi
+
+edited=$(git diff --name-status "$(git merge-base "$base" HEAD)" -- 'migrations/*.sql' | grep -v '^A' || true)
+if [[ -n $edited ]]; then
+  echo "Migrations are append-only. Add a new one instead of changing these:" >&2
+  echo "$edited" >&2
+  exit 1
 fi

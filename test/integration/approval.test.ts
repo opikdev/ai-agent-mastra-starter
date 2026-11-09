@@ -3,8 +3,15 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createMastra } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createDb, createPool } from '../../src/db/client.ts';
-import { createLogger } from '../../src/http/logger.ts';
-import { eventsOf, readSse, startStack, type TestStack, type TestUser } from '../helpers.ts';
+import { createLogger } from '../../src/platform/logger.ts';
+import {
+  eventsOf,
+  readSse,
+  startStack,
+  type TestStack,
+  type TestUser,
+  uniqueIp,
+} from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -39,6 +46,42 @@ describe('tool approval', () => {
     expect(eventsOf(resumed, 'tool-result')[0].result).toEqual({ deleted: 'note_1' });
     expect(eventsOf(resumed, 'done')[0]).toMatchObject({ status: 'completed' });
     expect(stack.notesApi.notes.get(user.id)).toHaveLength(0);
+  });
+
+  it('takes the approval as soon as the event arrives, before the stream ends', async () => {
+    const user = stack.signUp();
+    stack.notesApi.notes.set(user.id, [
+      { id: 'note_1', title: 'Old', body: 'x', version: 1, createdAt: 'x', updatedAt: 'x' },
+    ]);
+    const thread = await user.createThread();
+    stack.reply({ tool: { name: 'deleteNote', input: { id: 'note_1' } } });
+    const response = await user.request(`/v1/threads/${thread.id}/messages`, {
+      method: 'POST',
+      json: { content: 'Delete my note Old' },
+    });
+    const stream = response.body?.pipeThrough(new TextDecoderStream()).getReader();
+    let received = '';
+    while (stream && !received.includes('event: approval-required')) {
+      const { value, done } = await stream.read();
+      if (done) break;
+      received += value;
+    }
+    const [approval] = eventsOf(await readSse({ text: async () => received }), 'approval-required');
+
+    stack.reply({ text: 'Deleted it.' });
+    const resumed = await user.decide(approval.runId, approval.toolCallId, true);
+    expect(eventsOf(resumed, 'done')[0]).toMatchObject({ status: 'completed' });
+    expect(stack.notesApi.notes.get(user.id)).toHaveLength(0);
+
+    let rest = '';
+    for (let chunk = await stream?.read(); chunk && !chunk.done; chunk = await stream?.read()) {
+      rest += chunk.value;
+    }
+    expect(eventsOf(await readSse({ text: async () => rest }), 'done')[0]).toMatchObject({
+      status: 'awaiting_approval',
+    });
+    const next = await user.say(thread.id, 'Thanks');
+    expect(eventsOf(next, 'done')[0]).toMatchObject({ status: 'completed' });
   });
 
   it('tells the model the reason when the user declines', async () => {
@@ -142,7 +185,7 @@ describe('tool approval', () => {
       headers: {
         Authorization: `Bearer ${user.token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'restart-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: JSON.stringify({ toolCallId: approval.toolCallId, approved: true }),
     });

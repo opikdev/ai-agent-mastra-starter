@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Assistant } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
-import { createLogger } from '../../src/http/logger.ts';
-import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
+import { createLogger } from '../../src/platform/logger.ts';
+import { eventsOf, json, startStack, type TestStack, uniqueIp } from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -17,10 +17,32 @@ describe('http', () => {
       headers: {
         Origin: 'https://app.example.com',
         'Access-Control-Request-Method': 'POST',
-        'X-Forwarded-For': 'cors-test',
+        'X-Forwarded-For': uniqueIp(),
       },
     });
     expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
+  });
+
+  it('lets browsers read the request ID, location, and rate limit headers', async () => {
+    const user = stack.signUp();
+    const response = await user.request('/v1/threads', {
+      method: 'POST',
+      json: {},
+      headers: { Origin: 'https://app.example.com' },
+    });
+    const exposed = response.headers.get('access-control-expose-headers')?.split(',') ?? [];
+    expect(exposed.map((header) => header.trim().toLowerCase()).sort()).toEqual([
+      'location',
+      'ratelimit-limit',
+      'ratelimit-remaining',
+      'ratelimit-reset',
+      'retry-after',
+      'www-authenticate',
+      'x-request-id',
+    ]);
+    for (const header of ['x-request-id', 'location', 'ratelimit-limit', 'ratelimit-reset']) {
+      expect(response.headers.get(header), header).toBeTruthy();
+    }
   });
 
   it('rejects a body over 64 KiB', async () => {
@@ -52,7 +74,7 @@ describe('http', () => {
       headers: {
         Authorization: `Bearer ${user.token}`,
         'Content-Type': 'application/json',
-        'X-Forwarded-For': 'error-test',
+        'X-Forwarded-For': uniqueIp(),
       },
       body: '{}',
     });

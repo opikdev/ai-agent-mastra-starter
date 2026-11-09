@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { createMiddleware } from 'hono/factory';
 import { createNotesClient, type NotesClient, UpstreamError } from '../notes/client.ts';
+import { ProblemError } from '../platform/problem.ts';
 import type { AppEnv } from './env.ts';
-import { ProblemError } from './problem.ts';
 
 interface AuthOptions {
   notesApiUrl: string;

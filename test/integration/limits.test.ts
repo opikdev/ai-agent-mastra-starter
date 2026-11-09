@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eventsOf, json, startStack, type TestStack } from '../helpers.ts';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { runs } from '../../src/db/schema.ts';
+import { eventsOf, json, startStack, type TestStack, uniqueIp } from '../helpers.ts';
 
 describe('auth', () => {
   let stack: TestStack;
@@ -16,7 +18,7 @@ describe('auth', () => {
     ['a very long token', { Authorization: `Bearer ${'x'.repeat(513)}` }],
   ])('rejects %s with 401', async (_label, headers) => {
     const response = await stack.app.request('/v1/threads', {
-      headers: { 'X-Forwarded-For': 'auth-test', ...headers },
+      headers: { 'X-Forwarded-For': uniqueIp(), ...headers },
     });
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toBe('Bearer');
@@ -112,16 +114,20 @@ describe('failures', () => {
   });
   afterAll(() => stack.close());
 
-  it('reports a model provider failure as an error event', async () => {
+  it('reports a model provider failure as an error event, and logs it without the prompt', async () => {
     const user = stack.signUp();
     const thread = await user.createThread();
     stack.reply({ status: 400, error: 'invalid request' });
-    const events = await user.say(thread.id, 'hi');
+    const events = await user.say(thread.id, 'my secret plans');
     expect(eventsOf(events, 'error')[0]).toMatchObject({
       type: 'urn:problem:service-unavailable',
       status: 503,
     });
     expect(eventsOf(events, 'done')[0].status).toBe('failed');
+    const failure = stack.logs.find((line) => line.includes('Agent run failed'));
+    expect(JSON.parse(failure ?? '{}').err).toMatchObject({ statusCode: 400, isRetryable: false });
+    expect(stack.logs.join('')).not.toContain('my secret plans');
+    expect(stack.logs.join('')).not.toContain('You are a notes assistant');
     const next = await user.say(thread.id, 'again');
     expect(eventsOf(next, 'done')[0].status).toBe('completed');
   });
@@ -153,5 +159,56 @@ describe('timeouts', () => {
     stack.anthropic.delayMs = 0;
     expect(eventsOf(events, 'error')[0].detail).toContain('0.3 seconds');
     expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+  });
+});
+
+describe('a timeout during a tool call', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack({ AGENT_RUN_TIMEOUT_MS: '3000' });
+  });
+  afterAll(() => stack.close());
+
+  it('cancels the notes API call', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply({ tool: { name: 'getNote', input: { id: 'note_1' } } });
+    stack.notesApi.delayMs = 10_000;
+    const events = await user.say(thread.id, 'Open note_1');
+    stack.notesApi.delayMs = 0;
+    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    const call = stack.notesApi.requests.findLast(
+      (request) => new URL(request.url).pathname === '/v1/notes/note_1',
+    );
+    expect(call).toBeDefined();
+    expect(call?.signal.aborted).toBe(true);
+  });
+});
+
+describe('shutdown', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack();
+  });
+  afterAll(() => stack.close());
+
+  it('ends an open run as failed, so its thread is free for the next process', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    const before = stack.anthropic.requests.length;
+    stack.anthropic.delayMs = 5000;
+    const reply = user.say(thread.id, 'hi');
+    await vi.waitFor(() => expect(stack.anthropic.requests.length).toBeGreaterThan(before));
+    stack.shutdown.abort();
+    const events = await reply;
+    stack.anthropic.delayMs = 0;
+
+    expect(eventsOf(events, 'error')[0]).toMatchObject({
+      type: 'urn:problem:service-unavailable',
+      detail: 'The server shut down during this run. Send your message again.',
+    });
+    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    const rows = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
+    expect(rows.map((row) => row.status)).toEqual(['failed']);
   });
 });

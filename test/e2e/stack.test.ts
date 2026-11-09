@@ -158,6 +158,33 @@ describe('the running stack', () => {
     expect(gone.status).toBe(404);
   });
 
+  it('ends a run as aborted when the agent restarts mid-answer, and frees the thread', async () => {
+    const thread = (await (await agent('/v1/threads', { method: 'POST', body: '{}' })).json()) as {
+      id: string;
+    };
+    const send = (content: string) =>
+      agent(`/v1/threads/${thread.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      }).then(readSse);
+    const before = anthropic.requests.length;
+    anthropic.delayMs = 20_000;
+    const interrupted = send('Write me a long story');
+    await waitFor(() => anthropic.requests.length > before);
+
+    compose('restart', 'agent');
+    const events = await interrupted;
+    anthropic.delayMs = 0;
+    expect(events.find((event) => event.event === 'error')?.data.detail).toContain('shut down');
+    expect(events.at(-1)?.data).toMatchObject({ status: 'aborted' });
+
+    await waitFor(
+      async () => (await fetch(`${agentUrl}/readyz`).catch(() => null))?.status === 200,
+    );
+    anthropic.replies.push({ text: 'Back again.' });
+    expect((await send('Are you there?')).at(-1)?.data).toMatchObject({ status: 'completed' });
+  });
+
   it('checks messages with the guardrail model', () => {
     expect(anthropic.guardRequests.length).toBeGreaterThan(0);
     expect(anthropic.guardRequests[0]?.model).toBe('claude-haiku-5-5');

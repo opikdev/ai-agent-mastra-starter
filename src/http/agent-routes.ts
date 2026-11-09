@@ -1,24 +1,22 @@
-import { RequestContext } from '@mastra/core/request-context';
+import type { MastraDBMessage, StorageThreadType } from '@mastra/core/memory';
 import type { ChunkType } from '@mastra/core/stream';
 import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { type SSEStreamingApi, streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import type { Budget, Usage } from '../agent/budget.ts';
+import { type RunLimits, runOptions } from '../agent/context.ts';
 import type { Assistant } from '../agent/mastra.ts';
 import { type RelayResult, relay } from '../agent/relay.ts';
 import type { Run, Runs } from '../agent/runs.ts';
-import type { AgentContext } from '../agent/tools.ts';
+import type { Logger } from '../platform/logger.ts';
+import { ProblemError } from '../platform/problem.ts';
 import type { AppEnv } from './env.ts';
 import { internalError } from './error-handler.ts';
 import { fromPublicId, newThreadId, toPublicId } from './ids.ts';
-import type { Logger } from './logger.ts';
-import { ProblemError } from './problem.ts';
 import { jsonBody, query } from './validate.ts';
 
-export interface AgentLimits {
-  maxSteps: number;
-  maxOutputTokens: number;
+export interface AgentLimits extends RunLimits {
   runTimeoutMs: number;
 }
 
@@ -30,11 +28,14 @@ interface AgentRoutesOptions {
   limits: AgentLimits;
   requireAuth: MiddlewareHandler<AppEnv>;
   agentRateLimit: MiddlewareHandler<AppEnv>;
+  /** Aborts every open run when the process shuts down, so none stays marked running. */
+  shutdownSignal: AbortSignal;
 }
 
 const threadIdPattern = /^thr_[0-9a-f]{32}$/;
 const maxMessageLength = 8000;
 const maxHistory = 100;
+const heartbeatMs = 10_000;
 
 const createThreadSchema = z.strictObject({
   title: z.string().trim().min(1).max(200).optional(),
@@ -58,15 +59,7 @@ const approvalSchema = z.strictObject({
   reason: z.string().trim().min(1).max(1000).optional(),
 });
 
-interface StoredThread {
-  id: string;
-  resourceId: string;
-  title?: string | undefined;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-function presentThread(thread: StoredThread) {
+function presentThread(thread: StorageThreadType) {
   return {
     id: thread.id,
     title: thread.title || null,
@@ -75,27 +68,11 @@ function presentThread(thread: StoredThread) {
   };
 }
 
-interface StoredPart {
-  type: string;
-  text?: string;
-  toolInvocation?: { toolCallId: string; toolName: string; args: unknown; result?: unknown };
-}
-
-interface StoredMessage {
-  id: string;
-  role: string;
-  createdAt: Date;
-  content: { parts?: StoredPart[] };
-}
-
-function presentMessage(message: StoredMessage) {
-  const parts = message.content.parts ?? [];
-  const text = parts
-    .filter((part) => part.type === 'text')
-    .map((part) => part.text ?? '')
-    .join('');
+function presentMessage(message: MastraDBMessage) {
+  const { parts } = message.content;
+  const text = parts.map((part) => (part.type === 'text' ? part.text : '')).join('');
   const toolCalls = parts.flatMap((part) =>
-    part.type === 'tool-invocation' && part.toolInvocation
+    part.type === 'tool-invocation'
       ? [
           {
             toolCallId: part.toolInvocation.toolCallId,
@@ -127,6 +104,7 @@ export function createAgentRoutes({
   limits,
   requireAuth,
   agentRateLimit,
+  shutdownSignal,
 }: AgentRoutesOptions) {
   const app = new Hono<AppEnv>();
   app.use('*', requireAuth);
@@ -138,31 +116,20 @@ export function createAgentRoutes({
   }
 
   /** Someone else's thread looks exactly like one that doesn't exist. */
-  async function ownThread(userId: string, id: string): Promise<StoredThread> {
+  async function ownThread(userId: string, id: string): Promise<StorageThreadType> {
     if (!threadIdPattern.test(id)) throw threadNotFound(id);
     const thread = await (await memory()).getThreadById({ threadId: id });
     if (!thread || thread.resourceId !== userId) throw threadNotFound(id);
     return thread;
   }
 
-  function requestContext(user: AgentContext) {
-    const context = new RequestContext<AgentContext>();
-    context.set('userId', user.userId);
-    context.set('notes', user.notes);
-    return context;
-  }
-
-  function execution(user: AgentContext, threadId: string, signal: AbortSignal) {
-    return {
-      memory: { thread: threadId, resource: user.userId },
-      requestContext: requestContext(user),
-      maxSteps: limits.maxSteps,
-      modelSettings: { maxOutputTokens: limits.maxOutputTokens },
-      abortSignal: signal,
-    };
-  }
-
   function failure(result: RelayResult, requestId: string, timedOut: boolean): ProblemError {
+    if (shutdownSignal.aborted) {
+      return new ProblemError(
+        'service-unavailable',
+        'The server shut down during this run. Send your message again.',
+      );
+    }
     if (timedOut) {
       return new ProblemError(
         'service-unavailable',
@@ -196,10 +163,11 @@ export function createAgentRoutes({
         const disconnected = new AbortController();
         stream.onAbort(() => disconnected.abort());
         const timeout = AbortSignal.timeout(limits.runTimeoutMs);
-        const signal = AbortSignal.any([disconnected.signal, timeout]);
+        const signal = AbortSignal.any([disconnected.signal, timeout, shutdownSignal]);
         const heartbeat = setInterval(() => {
+          void stream.write(': keepalive\n\n');
           runs.touch(run.id).catch((err) => logger.warn({ err, requestId }, 'Run touch failed'));
-        }, 10_000);
+        }, heartbeatMs);
 
         const send = (event: string, data: unknown) =>
           stream.writeSSE({ event, data: JSON.stringify(data) });
@@ -209,8 +177,7 @@ export function createAgentRoutes({
           await send('run', { runId, threadId: run.threadId });
           const output = await start(signal);
           result = await relay(output.fullStream, {
-            send: ({ event, data }) =>
-              send(event, event === 'approval-required' ? { runId, ...data } : data),
+            send: ({ event, data }) => send(event, data),
             record: async (usage) => {
               spent.inputTokens += usage.inputTokens;
               spent.outputTokens += usage.outputTokens;
@@ -226,6 +193,7 @@ export function createAgentRoutes({
 
         if (result.status === 'awaiting_approval' && result.pending) {
           await runs.await(run.id, result.pending);
+          await send('approval-required', { runId, ...result.pending });
         } else {
           const final = result.status === 'aborted' ? 'failed' : result.status;
           await runs.finish(run.id, final === 'awaiting_approval' ? 'failed' : final);
@@ -285,7 +253,7 @@ export function createAgentRoutes({
     });
     return c.json({
       ...presentThread(thread),
-      messages: (messages as StoredMessage[]).map(presentMessage),
+      messages: messages.map(presentMessage),
     });
   });
 
@@ -304,7 +272,10 @@ export function createAgentRoutes({
     await budget.check(user.userId);
     const run = await runs.start(user.userId, thread.id);
     return streamRun(c, run, (signal) =>
-      agent.stream(content, { runId: run.id, ...execution(user, thread.id, signal) }),
+      agent.stream(content, {
+        runId: run.id,
+        ...runOptions({ context: user, threadId: thread.id, limits, abortSignal: signal }),
+      }),
     );
   });
 
@@ -323,7 +294,11 @@ export function createAgentRoutes({
       );
     }
     return streamRun(c, run, (signal) => {
-      const options = { runId: run.id, toolCallId, ...execution(user, run.threadId, signal) };
+      const options = {
+        runId: run.id,
+        toolCallId,
+        ...runOptions({ context: user, threadId: run.threadId, limits, abortSignal: signal }),
+      };
       return approved
         ? agent.approveToolCall(options)
         : agent.declineToolCall({ ...options, ...(reason ? { reason } : {}) });

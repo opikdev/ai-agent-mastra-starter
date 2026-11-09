@@ -1,7 +1,7 @@
 import type { Context, ErrorHandler } from 'hono';
+import type { Logger } from '../platform/logger.ts';
+import { ProblemError, problemResponse } from '../platform/problem.ts';
 import type { AppEnv } from './env.ts';
-import type { Logger } from './logger.ts';
-import { ProblemError, problemResponse } from './problem.ts';
 
 export function internalError(requestId: string): ProblemError {
   return new ProblemError(

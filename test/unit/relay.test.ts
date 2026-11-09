@@ -39,6 +39,20 @@ describe('relay', () => {
     expect(JSON.stringify(events)).not.toContain('secret detail');
   });
 
+  it('returns a pending approval for the caller to save before it tells the client', async () => {
+    const { result, events } = await run([
+      {
+        type: 'tool-call-approval',
+        payload: { toolCallId: 't1', toolName: 'deleteNote', args: { id: 'n1' }, usage: {} },
+      },
+    ]);
+    expect(result).toEqual({
+      status: 'awaiting_approval',
+      pending: { toolCallId: 't1', toolName: 'deleteNote', args: { id: 'n1' } },
+    });
+    expect(events).toEqual([]);
+  });
+
   it('skips the repeated usage of a resumed step only', async () => {
     const { usage } = await run([{ type: 'tool-call-resumed', payload: {} }, step(5), step(7)]);
     expect(usage.map((spent) => spent.inputTokens)).toEqual([7]);

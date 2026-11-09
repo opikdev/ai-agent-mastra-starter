@@ -7,7 +7,6 @@ export type RelayEvent =
   | { event: 'tool-call'; data: { toolCallId: string; toolName: string; args: unknown } }
   | { event: 'tool-result'; data: { toolCallId: string; toolName: string; result: unknown } }
   | { event: 'tool-error'; data: { toolCallId: string; toolName: string; detail: string } }
-  | { event: 'approval-required'; data: PendingApproval }
   | { event: 'blocked'; data: { reason: string } };
 
 export type RelayStatus = 'completed' | 'awaiting_approval' | 'blocked' | 'failed' | 'aborted';
@@ -32,6 +31,9 @@ function usageOf(
 
 /**
  * Forwards an agent stream as client events and records the tokens of every model call.
+ *
+ * A pending approval is returned, not sent, because the caller must save it before the client
+ * can approve it.
  *
  * A step that pauses for approval reports its usage on the approval chunk. When the run resumes,
  * Mastra repeats that step's usage on the next step-finish, so it's skipped there.
@@ -90,7 +92,6 @@ export async function relay(
         };
         await record(usageOf(chunk.payload.usage));
         result = { status: 'awaiting_approval', pending };
-        await send({ event: 'approval-required', data: pending });
         break;
       }
       case 'step-finish':

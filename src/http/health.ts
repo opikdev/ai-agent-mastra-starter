@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Db } from '../db/client.ts';
+import { ProblemError } from '../platform/problem.ts';
 import type { AppEnv } from './env.ts';
-import { ProblemError } from './problem.ts';
 
 export function createHealthRoutes(db: Db) {
   return new Hono<AppEnv>()

@@ -1,4 +1,4 @@
-import type { AgentContext } from '../agent/tools.ts';
+import type { AgentContext } from '../agent/context.ts';
 
 export interface AppEnv {
   Variables: {

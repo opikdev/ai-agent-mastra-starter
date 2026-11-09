@@ -11,13 +11,13 @@ Evals check that the agent picks the right tools for realistic requests. Each ca
 
 `pnpm test` proves the cases, checks, and runner work. It can't tell you whether the model behaves, because the replies are scripted.
 
-`pnpm eval` sends each case to the real model and prints pass or fail for each. It exits with 1 when the pass rate is below `EVAL_THRESHOLD`, 0.85 by default. Models vary from run to run, so a single failure isn't always a regression. Rerun before you change anything.
+`pnpm eval` sends each case to the real model, with the same `AGENT_*` settings and run options as the API, and prints pass or fail for each. It exits with 1 when the pass rate is below `EVAL_THRESHOLD`, 0.85 by default. Models vary from run to run, so a single failure isn't always a regression. Rerun before you change anything.
 
 ## Add a case
 
 1. Add it to `evals/cases.ts`, with the notes to seed, the message, and the gates.
 2. Use each check type once per case. Mastra keys results by check type, so a second `didNotCall` would share the first one's result. A test enforces this.
-3. Add the golden replies in the same position in `test/unit/evals.test.ts`.
+3. Add its golden replies to `golden` in `test/unit/evals.test.ts`, under the case's name. Seeded notes get IDs from the case name, so refer to them with `noteId(caseName, position)`.
 4. Run `pnpm test`, then `pnpm eval`.
 
 ## Run them in CI

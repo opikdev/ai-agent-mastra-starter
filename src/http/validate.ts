@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { z } from 'zod';
-import { ProblemError } from './problem.ts';
+import { ProblemError } from '../platform/problem.ts';
 
 function problem(error: z.ZodError): ProblemError {
   return new ProblemError(

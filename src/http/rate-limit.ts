@@ -2,9 +2,9 @@ import { sql } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import type { Db } from '../db/client.ts';
 import { rateLimits } from '../db/schema.ts';
+import { ProblemError } from '../platform/problem.ts';
 import { clientIp } from './client-ip.ts';
 import type { AppEnv } from './env.ts';
-import { ProblemError } from './problem.ts';
 
 const windowInterval = sql`interval '1 minute'`;
 
@@ -32,12 +32,19 @@ interface RateLimitOptions {
   limit: number;
   /** Limits each signed-in user when true, and each client IP otherwise. */
   perUser?: boolean;
-  trustProxy: boolean;
+  /** Proxies in front of the server, which say who the client is in X-Forwarded-For. */
+  trustedProxyHops: number;
 }
 
-export function rateLimit({ db, name, limit, perUser = false, trustProxy }: RateLimitOptions) {
+export function rateLimit({
+  db,
+  name,
+  limit,
+  perUser = false,
+  trustedProxyHops,
+}: RateLimitOptions) {
   return createMiddleware<AppEnv>(async (c, next) => {
-    const subject = perUser ? `user:${c.get('user').userId}` : clientIp(c, trustProxy);
+    const subject = perUser ? `user:${c.get('user').userId}` : clientIp(c, trustedProxyHops);
     const { count, resetAt } = await hit(db, `${name}:${subject}`);
     const secondsUntilReset = Math.max(1, Math.ceil((resetAt.getTime() - Date.now()) / 1000));
     const headers = {
