@@ -39,12 +39,13 @@ To serve several agents from one deployment instead:
 
 ## Connect your own API
 
-The agent trusts one API for identity and data. To use yours instead of the notes API:
+The agent trusts one API for identity and data. If your API meets the [notes API contract](notes-api.md), only point `NOTES_API_URL` at it, as [Use another API](notes-api.md#use-another-api) shows. Otherwise:
 
 1. Point `NOTES_API_URL` at your API.
 2. Change `me()` in `src/notes/client.ts` to your "who am I" endpoint. It must reject bad tokens with 401.
 3. Replace the notes client methods and tools with your own.
-4. Replace the `notes-*` services in `compose.yaml` with your API, and update `test/fake-notes-api.ts`.
+4. Replace the example `notes-*` services in `compose.yaml` with your API, and update `test/fake-notes-api.ts`.
+5. Update [docs/notes-api.md](notes-api.md) to describe your API's contract.
 
 Callers keep sending your API's tokens, and tools keep acting as the caller.
 

@@ -5,7 +5,7 @@ A production-ready AI agent API in TypeScript that you can run with one command 
 [![CI](https://github.com/opikdev/ai-agent-mastra-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/opikdev/ai-agent-mastra-starter/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The sample agent is a notes assistant. It reads and edits a user's notes through a REST API, acting as that user. Swap in your own API and tools to build a support agent, an ops copilot, or an assistant inside your product.
+The sample agent is a notes assistant. It reads and edits a user's notes through any REST API that meets the [notes API contract](docs/notes-api.md), acting as that user. Swap in your own API and tools to build a support agent, an ops copilot, or an assistant inside your product.
 
 ## Features
 
@@ -32,7 +32,7 @@ export ANTHROPIC_API_KEY=<YOUR_KEY>
 docker compose up --build --wait agent
 ```
 
-This starts the agent at <http://localhost:3000>, and a notes API at <http://localhost:3100> with fake seed data. Log in to the notes API to get a token:
+This starts the agent at <http://localhost:3000>, and an example notes API at <http://localhost:3100> with fake seed data. The example is [api-hono-starter](https://github.com/opikdev/api-hono-starter)'s image, and any API that meets the [contract](docs/notes-api.md) can replace it. Log in to the example API to get a token:
 
 ```sh
 TOKEN=$(curl -s -X POST localhost:3100/v1/sessions -H 'Content-Type: application/json' \
@@ -88,6 +88,7 @@ Tests never call a real model. They use a fake Anthropic API, so they're free an
 - [API](docs/api.md): endpoints, stream events, and approvals
 - [Architecture](docs/architecture.md): how a message becomes an agent run
 - [Customize](docs/customize.md): change the model, add tools, and connect your own API
+- [Notes API contract](docs/notes-api.md): what the agent needs from the API it acts on
 - [Evals](docs/evals.md): test the agent's behavior
 - [Errors](docs/errors.md): every problem type the API returns
 - [Operations](docs/operations.md): configuration, deploys, costs, and tracing
@@ -103,7 +104,7 @@ Tests never call a real model. They use a fake Anthropic API, so they're free an
 | `src/db/` | Schema, connections, and the migration runner |
 | `migrations/` | Generated SQL migrations, which are append-only |
 | `evals/` | Eval cases and the runner |
-| `test/` | Unit, integration, and end-to-end tests, plus fakes for the model and the notes API |
+| `test/` | Unit, integration, and end-to-end tests, plus fakes for the model and the notes API, so tests need no other service |
 | `docs/` | [API](docs/api.md), [architecture](docs/architecture.md), guides, and [decisions](docs/decisions/) |
 
 ## Contributing

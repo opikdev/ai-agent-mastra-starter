@@ -1,6 +1,6 @@
 # API
 
-Every `/v1` route needs `Authorization: Bearer <token>`, where the token comes from the notes API. Errors are [Problem Details](errors.md).
+Every `/v1` route needs `Authorization: Bearer <token>`, where the token comes from the [notes API](notes-api.md#auth). Errors are [Problem Details](errors.md).
 
 | Method | Path | Does |
 |---|---|---|

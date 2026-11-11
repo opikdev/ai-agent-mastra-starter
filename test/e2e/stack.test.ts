@@ -91,14 +91,14 @@ describe('the running stack', () => {
     expect(compose('exec', '-T', 'agent', 'id', '-u').trim()).not.toBe('0');
   });
 
-  it('rejects a token the notes API doesn’t know', async () => {
+  it('rejects a token the example notes API doesn’t know', async () => {
     const response = await fetch(`${agentUrl}/v1/threads`, {
       headers: { Authorization: 'Bearer nope' },
     });
     expect(response.status).toBe(401);
   });
 
-  it('reads the real notes API as the signed-in user', async () => {
+  it('reads the example notes API as the signed-in user', async () => {
     const thread = (await (await agent('/v1/threads', { method: 'POST', body: '{}' })).json()) as {
       id: string;
     };
