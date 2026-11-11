@@ -21,6 +21,7 @@ export interface FakeAnthropic {
   guardScores: number[];
   usage: { input: number; output: number };
   delayMs: number;
+  guardDelayMs: number;
   close(): Promise<void>;
 }
 
@@ -78,6 +79,7 @@ export async function startFakeAnthropic(
     guardScores: [],
     usage: { input: 100, output: 20 },
     delayMs: 0,
+    guardDelayMs: 0,
     close: async () => {},
   };
 
@@ -87,6 +89,9 @@ export async function startFakeAnthropic(
 
     if ((body.output_config as { format?: unknown } | undefined)?.format) {
       fake.guardRequests.push(body);
+      if (fake.guardDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, fake.guardDelayMs));
+      }
       const score = fake.guardScores.shift() ?? 0;
       if (score < 0) {
         res.writeHead(500, { 'content-type': 'application/json' });

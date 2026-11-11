@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { PromptInjectionDetector, UnicodeNormalizer } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
 import { agentContextSchema } from './context.ts';
+import { countedGuardrailModel } from './guardrail-usage.ts';
 import { notesTools } from './tools.ts';
 
 export const agentId = 'notes-assistant';
@@ -27,7 +28,7 @@ export function guardrails(guardrailModel: string) {
   return [
     normalize,
     new PromptInjectionDetector({
-      model: guardrailModel,
+      model: countedGuardrailModel(guardrailModel),
       threshold: 0.8,
       strategy: 'block',
       lastMessageOnly: true,

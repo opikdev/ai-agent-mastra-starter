@@ -66,7 +66,10 @@ export const runs = pgTable(
   ],
 );
 
-/** Tokens each user spent per UTC day, checked against DAILY_TOKEN_BUDGET. */
+/**
+ * Tokens each user spent per UTC day, checked against DAILY_TOKEN_BUDGET. The input and output
+ * totals count every model call. The guardrail columns hold the guardrail's share of them.
+ */
 export const tokenUsage = pgTable(
   'token_usage',
   {
@@ -74,6 +77,10 @@ export const tokenUsage = pgTable(
     day: date('day').notNull(),
     inputTokens: bigint('input_tokens', { mode: 'number' }).notNull().default(0),
     outputTokens: bigint('output_tokens', { mode: 'number' }).notNull().default(0),
+    guardrailInputTokens: bigint('guardrail_input_tokens', { mode: 'number' }).notNull().default(0),
+    guardrailOutputTokens: bigint('guardrail_output_tokens', { mode: 'number' })
+      .notNull()
+      .default(0),
     ...timestamps,
   },
   (table) => [

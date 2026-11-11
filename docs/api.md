@@ -10,7 +10,7 @@ Every `/v1` route needs `Authorization: Bearer <token>`, where the token comes f
 | `DELETE` | `/v1/threads/{id}` | Deletes a thread and its messages |
 | `POST` | `/v1/threads/{id}/messages` | Sends a message and streams the reply. Body: `{ "content": string }` |
 | `POST` | `/v1/runs/{id}/approval` | Approves or declines a paused tool call and streams the rest. Body: `{ "toolCallId": string, "approved": boolean, "reason"?: string }` |
-| `GET` | `/v1/usage` | Shows today's tokens and budget |
+| `GET` | `/v1/usage` | Shows today's tokens and budget: the [usage](#usage) fields plus `dailyBudget` and `remaining` |
 | `GET` | `/healthz` | Liveness |
 | `GET` | `/readyz` | Readiness, including Postgres |
 
@@ -30,9 +30,19 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 | `approval-required` | `{ runId, toolCallId, toolName, args }` | A tool waits for approval. It comes just before `done` |
 | `blocked` | `{ reason }` | A guardrail blocked the message |
 | `error` | A Problem Details object | The run failed |
-| `done` | `{ runId, status, usage: { inputTokens, outputTokens } }` | Last, unless the client disconnected |
+| `done` | `{ runId, status, usage }`, with the run's [usage](#usage) | Last, unless the client disconnected |
 
 `status` is `completed`, `awaiting_approval`, `blocked`, `failed`, or `aborted`.
+
+## Usage
+
+Usage counts tokens from every model call, split by the model's role:
+
+| Field | Holds |
+|---|---|
+| `inputTokens`, `outputTokens` | Totals across the agent and the guardrail. The budget counts these |
+| `agent` | `{ inputTokens, outputTokens }` from the agent's model |
+| `guardrail` | `{ inputTokens, outputTokens }` from the prompt injection check. Zero when `GUARDRAIL_MODEL` is `off` |
 
 Every 10 seconds, the stream also sends a `: keepalive` comment, so proxies don't close it while the model thinks. SSE clients ignore comments.
 

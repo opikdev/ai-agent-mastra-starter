@@ -1,0 +1,2 @@
+ALTER TABLE "token_usage" ADD COLUMN "guardrail_input_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "token_usage" ADD COLUMN "guardrail_output_tokens" bigint DEFAULT 0 NOT NULL;
