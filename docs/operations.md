@@ -9,7 +9,7 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `DATABASE_URL` | Required | Postgres URL for the app role |
 | `MIGRATION_DATABASE_URL` | Required for migrations | Postgres URL for the owner role |
 | `DATABASE_POOL_MAX` | `10` | Most Postgres connections each process opens, for the app and Mastra together. At least 1 |
-| `NOTES_API_URL` | Required | The API the agent acts on. It checks tokens and serves the tools |
+| `NOTES_API_URL` | Required | The API the agent acts on. It checks tokens and serves the tools. Any API that meets the [contract](notes-api.md) works |
 | `NOTES_API_TIMEOUT_MS` | `5000` | Timeout for each notes API call |
 | `ANTHROPIC_API_KEY` | Required for `anthropic/` models | Never logged or sent to tools |
 | `ANTHROPIC_BASE_URL` | Anthropic's API | Send model calls through a proxy or gateway |

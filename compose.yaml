@@ -48,7 +48,9 @@ services:
       notes-api:
         condition: service_healthy
 
-  # The app the agent acts on: api-hono-starter's notes API. Swap in your own API.
+  # Optional example backend: api-hono-starter's image, which meets docs/notes-api.md.
+  # To use your own API, set NOTES_API_URL on agent, drop notes-api from its depends_on,
+  # and delete the notes-* services.
   notes-db:
     image: postgres:18-alpine
     environment:
@@ -64,7 +66,7 @@ services:
       retries: 90
 
   notes-migrate:
-    image: ghcr.io/opikdev/api-hono-starter:0.2.2
+    image: ghcr.io/opikdev/api-hono-starter:0.4.0
     command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
     environment:
       MIGRATION_DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
@@ -74,7 +76,7 @@ services:
         condition: service_healthy
 
   notes-api:
-    image: ghcr.io/opikdev/api-hono-starter:0.2.2
+    image: ghcr.io/opikdev/api-hono-starter:0.4.0
     environment:
       DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
     ports:

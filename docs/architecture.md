@@ -4,7 +4,7 @@ The service is a small Hono API in front of one Mastra agent. Hono owns HTTP: au
 
 ## How a message runs
 
-1. **Auth.** `src/http/auth.ts` sends the caller's bearer token to the notes API's `GET /v1/users/me`. A valid token gives a user ID and a notes client bound to that token. Results are cached for 30 seconds.
+1. **Auth.** `src/http/auth.ts` sends the caller's bearer token to the notes API's `GET /v1/users/me`, as the [contract](notes-api.md#auth) describes. A valid token gives a user ID and a notes client bound to that token. Results are cached for 30 seconds.
 2. **Limits.** The request passes the per-IP and per-user rate limits, then the daily token budget in `src/agent/budget.ts`.
 3. **Run.** `src/agent/runs.ts` opens a run row. A thread has at most one open run, so two messages never interleave.
 4. **Agent.** `agent.stream()` runs with the thread as memory, the user's notes client in the request context, and the step, output, and time limits.

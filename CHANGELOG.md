@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
+- [docs/notes-api.md](docs/notes-api.md) documents the contract the agent needs from the notes API: endpoints, fields, auth, errors, and timeouts.
+
+### Changed
+
+- Any API that meets the notes API contract works. Compose and the end-to-end tests run api-hono-starter as an optional example backend, now at 0.4.0.
 
 ## [0.2.0] - 2026-11-09
 
