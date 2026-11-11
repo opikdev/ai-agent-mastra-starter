@@ -42,7 +42,8 @@ export function createFakeNotesApi(): FakeNotesApi {
   const app = new Hono<FakeEnv>();
 
   app.use(async (c, next) => {
-    requests.push(c.req.raw.clone());
+    // Not a clone: undici holds a clone's abort controller by a WeakRef, so a GC can stop its abort.
+    requests.push(c.req.raw);
     if (api.delayMs > 0 && c.req.path.startsWith('/v1/notes')) {
       await new Promise((resolve, reject) => {
         setTimeout(resolve, api.delayMs);

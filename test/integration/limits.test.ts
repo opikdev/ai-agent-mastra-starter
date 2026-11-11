@@ -181,7 +181,7 @@ describe('a timeout during a tool call', () => {
       (request) => new URL(request.url).pathname === '/v1/notes/note_1',
     );
     expect(call).toBeDefined();
-    await vi.waitFor(() => expect(call?.signal.aborted).toBe(true));
+    expect(call?.signal.aborted).toBe(true);
   });
 });
 
