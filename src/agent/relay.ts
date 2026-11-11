@@ -30,20 +30,36 @@ function usageOf(
 }
 
 /**
- * Forwards an agent stream as client events and records the tokens of every model call.
+ * Records the tokens of each finished model step. Pass it to Mastra as `onStepFinish`, which runs
+ * as each step ends. The stream's step-finish chunk can't be used: when the run finishes, Mastra
+ * overwrites the last step's usage on it with the run's total, often before the relay reads it.
+ *
+ * A step that pauses for approval reports its usage on the approval chunk instead. A resumed run
+ * repeats that step first, so its usage is skipped there.
+ */
+export function stepUsage(
+  record: (usage: Usage) => Promise<void>,
+  { resumed }: { resumed: boolean },
+) {
+  let skipNext = resumed;
+  return async (step: { usage?: Parameters<typeof usageOf>[0] }) => {
+    if (skipNext) skipNext = false;
+    else await record(usageOf(step.usage));
+  };
+}
+
+/**
+ * Forwards an agent stream as client events, and records the usage of a step that pauses for
+ * approval.
  *
  * A pending approval is returned, not sent, because the caller must save it before the client
  * can approve it.
- *
- * A step that pauses for approval reports its usage on the approval chunk. When the run resumes,
- * Mastra repeats that step's usage on the next step-finish, so it's skipped there.
  */
 export async function relay(
   chunks: AsyncIterable<ChunkType<undefined>>,
   { send, record, onToolError }: RelayOptions,
 ): Promise<RelayResult> {
   let result: RelayResult = { status: 'completed' };
-  let skipNextStepUsage = false;
 
   for await (const chunk of chunks) {
     switch (chunk.type) {
@@ -81,9 +97,6 @@ export async function relay(
           },
         });
         break;
-      case 'tool-call-resumed':
-        skipNextStepUsage = true;
-        break;
       case 'tool-call-approval': {
         const pending = {
           toolCallId: chunk.payload.toolCallId,
@@ -94,10 +107,6 @@ export async function relay(
         result = { status: 'awaiting_approval', pending };
         break;
       }
-      case 'step-finish':
-        if (skipNextStepUsage) skipNextStepUsage = false;
-        else await record(usageOf(chunk.payload.output.usage));
-        break;
       case 'tripwire':
         result = { status: 'blocked' };
         await send({ event: 'blocked', data: { reason: chunk.payload.reason } });

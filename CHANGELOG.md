@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
 
+### Fixed
+
+- A run's token usage, in its `done` event and in the daily budget, no longer sometimes counts the run's total again for its last model call. That happened when the client read the stream more slowly than the model answered.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added
