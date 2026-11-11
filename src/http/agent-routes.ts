@@ -7,7 +7,7 @@ import { z } from 'zod';
 import type { Budget, Usage } from '../agent/budget.ts';
 import { type RunLimits, runOptions } from '../agent/context.ts';
 import type { Assistant } from '../agent/mastra.ts';
-import { type RelayResult, relay } from '../agent/relay.ts';
+import { type RelayResult, relay, stepUsage } from '../agent/relay.ts';
 import type { Run, Runs } from '../agent/runs.ts';
 import type { Logger } from '../platform/logger.ts';
 import { ProblemError } from '../platform/problem.ts';
@@ -150,12 +150,21 @@ export function createAgentRoutes({
   function streamRun(
     c: Context<AppEnv>,
     run: Run,
-    start: (signal: AbortSignal) => Promise<{ fullStream: AsyncIterable<ChunkType<undefined>> }>,
+    resumed: boolean,
+    start: (
+      signal: AbortSignal,
+      onStepFinish: ReturnType<typeof stepUsage>,
+    ) => Promise<{ fullStream: AsyncIterable<ChunkType<undefined>> }>,
   ) {
     const user = c.get('user');
     const requestId = c.get('requestId');
     const runId = toPublicId('run', run.id);
     const spent: Usage = { inputTokens: 0, outputTokens: 0 };
+    const record = async (usage: Usage) => {
+      spent.inputTokens += usage.inputTokens;
+      spent.outputTokens += usage.outputTokens;
+      await budget.record(user.userId, usage);
+    };
 
     return streamSSE(
       c,
@@ -175,14 +184,10 @@ export function createAgentRoutes({
         let result: RelayResult;
         try {
           await send('run', { runId, threadId: run.threadId });
-          const output = await start(signal);
+          const output = await start(signal, stepUsage(record, { resumed }));
           result = await relay(output.fullStream, {
             send: ({ event, data }) => send(event, data),
-            record: async (usage) => {
-              spent.inputTokens += usage.inputTokens;
-              spent.outputTokens += usage.outputTokens;
-              await budget.record(user.userId, usage);
-            },
+            record,
             onToolError: (err) => logger.error({ err, requestId, runId }, 'Tool failed'),
           });
         } catch (error) {
@@ -271,9 +276,10 @@ export function createAgentRoutes({
     const { content } = await jsonBody(c, messageSchema);
     await budget.check(user.userId);
     const run = await runs.start(user.userId, thread.id);
-    return streamRun(c, run, (signal) =>
+    return streamRun(c, run, false, (signal, onStepFinish) =>
       agent.stream(content, {
         runId: run.id,
+        onStepFinish,
         ...runOptions({ context: user, threadId: thread.id, limits, abortSignal: signal }),
       }),
     );
@@ -293,10 +299,11 @@ export function createAgentRoutes({
         `Run ${id} isn't waiting for approval of tool call ${toolCallId}.`,
       );
     }
-    return streamRun(c, run, (signal) => {
+    return streamRun(c, run, true, (signal, onStepFinish) => {
       const options = {
         runId: run.id,
         toolCallId,
+        onStepFinish,
         ...runOptions({ context: user, threadId: run.threadId, limits, abortSignal: signal }),
       };
       return approved

@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Any API that meets the notes API contract works. Compose and the end-to-end tests run api-hono-starter as an optional example backend, now at 0.4.0.
 
+### Fixed
+
+- A run's token usage, in its `done` event and in the daily budget, no longer sometimes counts the run's total again for its last model call. That happened when the client read the stream more slowly than the model answered.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runs } from '../../src/db/schema.ts';
 import { fakeSignature } from '../fake-anthropic.ts';
-import { eventsOf, startStack, type TestStack } from '../helpers.ts';
+import { eventsOf, readSse, startStack, type TestStack } from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -94,6 +94,27 @@ describe('a conversation', () => {
       vi.useRealTimers();
       stack.anthropic.delayMs = 0;
     }
+  });
+
+  it('counts each model call once when the client reads the stream late', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    const before = stack.anthropic.requests.length;
+    stack.reply({ tool: { name: 'listNotes', input: { limit: 5 } } }, { text: 'No notes yet.' });
+    const response = await user.request(`/v1/threads/${thread.id}/messages`, {
+      method: 'POST',
+      json: { content: 'What notes do I have?' },
+    });
+    const untilSaved = { timeout: 5000 };
+    await vi.waitFor(() => expect(stack.anthropic.requests.length).toBe(before + 2), untilSaved);
+    await vi.waitFor(async () => {
+      const saved = await (await user.request(`/v1/threads/${thread.id}`)).json();
+      expect(JSON.stringify(saved.messages)).toContain('No notes yet.');
+    }, untilSaved);
+
+    const usage = { inputTokens: 200, outputTokens: 40 };
+    expect(eventsOf(await readSse(response), 'done')[0].usage).toEqual(usage);
+    expect(await (await user.request('/v1/usage')).json()).toMatchObject(usage);
   });
 
   it('frees the thread when the client disconnects mid-answer', async () => {

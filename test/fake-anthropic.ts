@@ -114,6 +114,8 @@ export async function startFakeAnthropic(
 
     fake.requests.push(body);
     if (fake.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, fake.delayMs));
+    // A caller that gave up during the delay must not take the reply scripted for the next one.
+    if (res.destroyed) return;
     const reply = fake.replies.shift() ?? { text: 'OK.' };
     if ('status' in reply) {
       res.writeHead(reply.status, { 'content-type': 'application/json' });
