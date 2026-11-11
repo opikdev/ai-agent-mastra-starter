@@ -19,7 +19,7 @@ Set these in the environment. `src/config.ts` validates them at startup and name
 | `AGENT_MAX_OUTPUT_TOKENS` | `4096` | Output tokens per model call |
 | `AGENT_RUN_TIMEOUT_MS` | `120000` | Longest a run may take |
 | `AGENT_MEMORY_MESSAGES` | `20` | Earlier messages the agent sees |
-| `DAILY_TOKEN_BUDGET` | `500000` | Input plus output tokens per user per UTC day |
+| `DAILY_TOKEN_BUDGET` | `500000` | Input plus output tokens per user per UTC day, from the agent and the guardrail together |
 | `RUN_RETENTION_DAYS` | `30` | Days to keep finished runs and daily token usage |
 | `APPROVAL_TTL_HOURS` | `24` | Hours an approval may wait before its run fails and the thread unlocks |
 | `RATE_LIMIT_PER_MINUTE` | `300` | Requests per IP per minute |
@@ -63,11 +63,11 @@ Each message costs at least one model call, plus one Haiku call for the guardrai
 | Sonnet 5.5 | $2 per million input tokens, $10 per million output tokens |
 | Haiku 5.5 guardrail | $0.10 per million input tokens, $0.50 per million output tokens |
 | A worst-case run | 8 steps × 4,096 output tokens, about $0.33 in output, plus input |
-| A user's full daily budget | 500,000 tokens, about $1 to $5 depending on the mix |
+| A user's full daily budget | 500,000 tokens, at most about $5 if it's all Sonnet output |
 
-The budget counts the agent's calls only. The guardrail's calls aren't counted, because Mastra doesn't report them.
+The budget counts every model call, the guardrail's included. Tokens count the same whichever model spent them, so a Haiku token uses as much budget as a Sonnet token. To price them, read the `agent` and `guardrail` split in `GET /v1/usage` or a run's `done` event, and apply each model's rates.
 
-A run already under way can finish past the budget. The next one is refused.
+The budget is checked once, before a run starts. The guardrail call is part of the run, so it's made even when the run's tokens then go past the budget, and a blocked message still records what the check spent. A run already under way can finish past the budget. The next one is refused.
 
 ## Tracing
 

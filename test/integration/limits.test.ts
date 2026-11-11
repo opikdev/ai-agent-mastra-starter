@@ -78,6 +78,8 @@ describe('budgets and rate limits', () => {
     expect(await (await user.request('/v1/usage')).json()).toEqual({
       inputTokens: 200,
       outputTokens: 40,
+      agent: { inputTokens: 200, outputTokens: 40 },
+      guardrail: { inputTokens: 0, outputTokens: 0 },
       dailyBudget: 200,
       remaining: 0,
     });

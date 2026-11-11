@@ -8,7 +8,7 @@ The service is a small Hono API in front of one Mastra agent. Hono owns HTTP: au
 2. **Limits.** The request passes the per-IP and per-user rate limits, then the daily token budget in `src/agent/budget.ts`.
 3. **Run.** `src/agent/runs.ts` opens a run row. A thread has at most one open run, so two messages never interleave.
 4. **Agent.** `agent.stream()` runs with the thread as memory, the user's notes client in the request context, and the step, output, and time limits.
-5. **Guardrails.** Input processors strip control characters, then Haiku 5.5 checks the newest message for prompt injection. A flagged message ends the run as `blocked`.
+5. **Guardrails.** Input processors strip control characters, then Haiku 5.5 checks the newest message for prompt injection. A flagged message ends the run as `blocked`. `src/agent/guardrail-usage.ts` records the check's tokens for the run, as [decision 007](decisions/007-count-guardrail-tokens-per-run.md) explains.
 6. **Tools.** The model calls tools in `src/agent/tools.ts`. They call the notes API with the caller's token, and the call is cancelled if the run ends first. `updateNote` and `deleteNote` pause for approval first.
 7. **Relay.** `src/agent/relay.ts` turns Mastra chunks into server-sent events, and records each model call's tokens.
 8. **Settle.** The run ends as `completed`, `awaiting_approval`, `blocked`, `failed`, or `aborted`. A paused run is saved as `awaiting_approval` before the client gets `approval-required`, so it can approve at once.
@@ -28,7 +28,8 @@ An approval resumes the same run from its Postgres snapshot, so it works after a
 | `src/agent/tools.ts` | The notes tools |
 | `src/agent/mastra.ts` | Mastra wiring: Postgres storage, logs, and tracing |
 | `src/agent/runs.ts` | Run rows: one open run per thread, approvals, and stale runs |
-| `src/agent/budget.ts` | Daily token budgets |
+| `src/agent/budget.ts` | Daily token budgets, split into agent and guardrail tokens |
+| `src/agent/guardrail-usage.ts` | The guardrail's model, which records its tokens for each run |
 | `src/agent/relay.ts` | Mastra stream to client events, plus token accounting |
 | `src/notes/client.ts` | The notes API client |
 | `src/platform/` | Problem Details errors, the logger, and the hourly cleanup |

@@ -4,8 +4,8 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { type SSEStreamingApi, streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { Budget, Usage } from '../agent/budget.ts';
-import { type RunLimits, runOptions } from '../agent/context.ts';
+import { type Budget, noUsage, summarize, type Usage, type UsageRole } from '../agent/budget.ts';
+import { type RunLimits, runOptions, type UsageRecorder } from '../agent/context.ts';
 import type { Assistant } from '../agent/mastra.ts';
 import { type RelayResult, relay, stepUsage } from '../agent/relay.ts';
 import type { Run, Runs } from '../agent/runs.ts';
@@ -154,17 +154,23 @@ export function createAgentRoutes({
     start: (
       signal: AbortSignal,
       onStepFinish: ReturnType<typeof stepUsage>,
+      recordGuardrailUsage: UsageRecorder,
     ) => Promise<{ fullStream: AsyncIterable<ChunkType<undefined>> }>,
   ) {
     const user = c.get('user');
     const requestId = c.get('requestId');
     const runId = toPublicId('run', run.id);
-    const spent: Usage = { inputTokens: 0, outputTokens: 0 };
-    const record = async (usage: Usage) => {
-      spent.inputTokens += usage.inputTokens;
-      spent.outputTokens += usage.outputTokens;
-      await budget.record(user.userId, usage);
+    const spent = noUsage();
+    const add = (role: UsageRole, usage: Usage) => {
+      spent[role].inputTokens += usage.inputTokens;
+      spent[role].outputTokens += usage.outputTokens;
     };
+    const record = async (usage: Usage) => {
+      add('agent', usage);
+      await budget.record(user.userId, 'agent', usage);
+    };
+    // Saved once the run ends, so a database error can't fail the check and let the message through.
+    const addGuardrailUsage = (usage: Usage) => add('guardrail', usage);
 
     return streamSSE(
       c,
@@ -184,7 +190,7 @@ export function createAgentRoutes({
         let result: RelayResult;
         try {
           await send('run', { runId, threadId: run.threadId });
-          const output = await start(signal, stepUsage(record, { resumed }));
+          const output = await start(signal, stepUsage(record, { resumed }), addGuardrailUsage);
           result = await relay(output.fullStream, {
             send: ({ event, data }) => send(event, data),
             record,
@@ -195,6 +201,7 @@ export function createAgentRoutes({
         } finally {
           clearInterval(heartbeat);
         }
+        await budget.record(user.userId, 'guardrail', spent.guardrail);
 
         if (result.status === 'awaiting_approval' && result.pending) {
           await runs.await(run.id, result.pending);
@@ -209,7 +216,7 @@ export function createAgentRoutes({
           const problem = failure(result, requestId, timeout.aborted);
           await send('error', problem.toProblem(c.req.path));
         }
-        await send('done', { runId, status: result.status, usage: spent });
+        await send('done', { runId, status: result.status, usage: summarize(spent) });
       },
       async (error, stream) => {
         logger.error({ err: error, requestId, runId }, 'Streaming failed');
@@ -276,11 +283,17 @@ export function createAgentRoutes({
     const { content } = await jsonBody(c, messageSchema);
     await budget.check(user.userId);
     const run = await runs.start(user.userId, thread.id);
-    return streamRun(c, run, false, (signal, onStepFinish) =>
+    return streamRun(c, run, false, (signal, onStepFinish, recordGuardrailUsage) =>
       agent.stream(content, {
         runId: run.id,
         onStepFinish,
-        ...runOptions({ context: user, threadId: thread.id, limits, abortSignal: signal }),
+        ...runOptions({
+          context: user,
+          threadId: thread.id,
+          limits,
+          abortSignal: signal,
+          recordGuardrailUsage,
+        }),
       }),
     );
   });
@@ -299,12 +312,18 @@ export function createAgentRoutes({
         `Run ${id} isn't waiting for approval of tool call ${toolCallId}.`,
       );
     }
-    return streamRun(c, run, true, (signal, onStepFinish) => {
+    return streamRun(c, run, true, (signal, onStepFinish, recordGuardrailUsage) => {
       const options = {
         runId: run.id,
         toolCallId,
         onStepFinish,
-        ...runOptions({ context: user, threadId: run.threadId, limits, abortSignal: signal }),
+        ...runOptions({
+          context: user,
+          threadId: run.threadId,
+          limits,
+          abortSignal: signal,
+          recordGuardrailUsage,
+        }),
       };
       return approved
         ? agent.approveToolCall(options)
@@ -313,7 +332,7 @@ export function createAgentRoutes({
   });
 
   app.get('/usage', async (c) => {
-    const used = await budget.used(c.get('user').userId);
+    const used = summarize(await budget.used(c.get('user').userId));
     const total = used.inputTokens + used.outputTokens;
     return c.json({
       ...used,

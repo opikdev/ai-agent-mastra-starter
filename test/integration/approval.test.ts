@@ -99,7 +99,12 @@ describe('tool approval', () => {
     const { approval } = await askToDelete(user);
     stack.reply({ text: 'Deleted.' });
     const resumed = await user.decide(approval.runId, approval.toolCallId, true);
-    expect(eventsOf(resumed, 'done')[0].usage).toEqual({ inputTokens: 100, outputTokens: 20 });
+    expect(eventsOf(resumed, 'done')[0].usage).toEqual({
+      inputTokens: 100,
+      outputTokens: 20,
+      agent: { inputTokens: 100, outputTokens: 20 },
+      guardrail: { inputTokens: 0, outputTokens: 0 },
+    });
     const usage = await (await user.request('/v1/usage')).json();
     expect(usage).toMatchObject({ inputTokens: 200, outputTokens: 40 });
   });

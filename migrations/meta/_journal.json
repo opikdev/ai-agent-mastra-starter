@@ -15,6 +15,13 @@
       "when": 1794198194389,
       "tag": "0001_drop_unused_runs_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794388225880,
+      "tag": "0002_count_guardrail_usage",
+      "breakpoints": true
     }
   ]
 }

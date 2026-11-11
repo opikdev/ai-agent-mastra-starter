@@ -41,7 +41,12 @@ describe('a conversation', () => {
     expect(eventsOf(first, 'tool-result')[0].result.notes[0]).toMatchObject({ title: 'Groceries' });
     expect(eventsOf(first, 'done')[0]).toMatchObject({
       status: 'completed',
-      usage: { inputTokens: 200, outputTokens: 40 },
+      usage: {
+        inputTokens: 200,
+        outputTokens: 40,
+        agent: { inputTokens: 200, outputTokens: 40 },
+        guardrail: { inputTokens: 0, outputTokens: 0 },
+      },
     });
 
     await user.say(thread.id, 'What does it say?');
@@ -112,7 +117,12 @@ describe('a conversation', () => {
       expect(JSON.stringify(saved.messages)).toContain('No notes yet.');
     }, untilSaved);
 
-    const usage = { inputTokens: 200, outputTokens: 40 };
+    const usage = {
+      inputTokens: 200,
+      outputTokens: 40,
+      agent: { inputTokens: 200, outputTokens: 40 },
+      guardrail: { inputTokens: 0, outputTokens: 0 },
+    };
     expect(eventsOf(await readSse(response), 'done')[0].usage).toEqual(usage);
     expect(await (await user.request('/v1/usage')).json()).toMatchObject(usage);
   });

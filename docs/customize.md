@@ -61,13 +61,13 @@ Mastra's `MCPClient` from `@mastra/mcp` turns an MCP server's tools into agent t
 
 ## Change the guardrails
 
-Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message.
+Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message. Give it `countedGuardrailModel(id)` from `src/agent/guardrail-usage.ts` as its model, so its tokens count toward the budget as guardrail tokens.
 
 The prompt injection check fails open: if Haiku is down, messages go through. Approvals and acting as the user are the real defense, because they cap what an injected instruction can do.
 
 ## Upgrade Mastra
 
-`@mastra/core` is pinned to an exact version, because `src/agent/relay.ts` and the evals rely on details that can change in any release: stream chunk shapes, the repeated usage after a resumed approval, and eval results keyed by check type. The other `@mastra/*` packages follow it.
+`@mastra/core` is pinned to an exact version, because `src/agent/relay.ts` and the evals rely on details that can change in any release: stream chunk shapes, the repeated usage after a resumed approval, the guardrail's dynamic model and its usage shape in `src/agent/guardrail-usage.ts`, and eval results keyed by check type. The other `@mastra/*` packages follow it.
 
 1. Bump `@mastra/core` and the other `@mastra/*` packages together.
 2. Read Mastra's changelog for stream, approval, memory, and storage changes.

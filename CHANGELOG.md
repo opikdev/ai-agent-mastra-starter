@@ -11,10 +11,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Usage in the `done` event and `GET /v1/usage` adds `agent` and `guardrail` objects, each with `inputTokens` and `outputTokens`. The top-level totals now include the guardrail's tokens.
 - Any API that meets the notes API contract works. Compose and the end-to-end tests run api-hono-starter as an optional example backend, now at 0.4.0.
 
 ### Fixed
 
+- The prompt injection guardrail's tokens count toward the daily budget and the run's usage. Before, only the agent's calls counted. A message the guardrail blocks still records the check's tokens. The migration adds two `token_usage` columns with defaults, so it doesn't rewrite the table.
 - A run's token usage, in its `done` event and in the daily budget, no longer sometimes counts the run's total again for its last model call. That happened when the client read the stream more slowly than the model answered.
 
 ## [0.2.0] - 2026-11-09

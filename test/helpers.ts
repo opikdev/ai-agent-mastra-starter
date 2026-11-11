@@ -93,6 +93,7 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
   anthropic.replies.length = 0;
   anthropic.guardScores.length = 0;
   anthropic.delayMs = 0;
+  anthropic.guardDelayMs = 0;
   const notesApi = createFakeNotesApi();
   const config = loadConfig({
     DATABASE_URL: inject('databaseUrl'),
