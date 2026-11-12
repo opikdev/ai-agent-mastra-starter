@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Usage in the `done` event and `GET /v1/usage` adds `agent` and `guardrail` objects, each with `inputTokens` and `outputTokens`. The top-level totals now include the guardrail's tokens.
 - Any API that meets the notes API contract works. Compose and the end-to-end tests run api-hono-starter as an optional example backend, now at 0.4.0.
+- Compose and the end-to-end tests run the hardened api-hono-starter 0.5.0 on a read-only filesystem. The notes client already relied only on `Retry-After` and the problem `detail`, so its rate-limit headers and error changes need nothing else.
 
 ### Fixed
 

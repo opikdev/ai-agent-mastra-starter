@@ -66,7 +66,8 @@ services:
       retries: 90
 
   notes-migrate:
-    image: ghcr.io/opikdev/api-hono-starter:0.4.0
+    image: ghcr.io/opikdev/api-hono-starter:0.5.0
+    read_only: true
     command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
     environment:
       MIGRATION_DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
@@ -76,7 +77,10 @@ services:
         condition: service_healthy
 
   notes-api:
-    image: ghcr.io/opikdev/api-hono-starter:0.4.0
+    image: ghcr.io/opikdev/api-hono-starter:0.5.0
+    read_only: true
+    # Above the API's default drain plus shutdown timeout, so requests in flight finish first.
+    stop_grace_period: 45s
     environment:
       DATABASE_URL: postgres://notes_owner:notes_owner_dev_password@notes-db:5432/notes
     ports:
