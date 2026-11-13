@@ -61,6 +61,7 @@ Message and approval responses are `text/event-stream`. Each event's `data` is J
 | `blocked` | `null` | The guardrail flagged the message. A `blocked` event comes first |
 | `failed` | `guardrail_unavailable` | The prompt injection check failed, and `GUARDRAIL_ON_ERROR` is `block` |
 | `failed` | `model_error`, `error` | The model provider or the server failed. An `error` event comes first |
+| `failed` | `budget_exceeded` | An approval or decline came when the budget couldn't resume the run, so it ended without calling the tool. An `error` event comes first |
 | `aborted` | `timeout`, `shutdown` | The run hit `AGENT_RUN_TIMEOUT_MS`, or the server shut down. An `error` event comes first |
 
 The run's row in Postgres keeps the same status and reason, except that an aborted run is saved as `failed`. An `incomplete` or `refused` run frees its thread like a completed one, so the user can ask again.
@@ -96,7 +97,9 @@ curl -N -X POST localhost:3000/v1/runs/$RUN_ID/approval -H "Authorization: Beare
 
 To decline, send `"approved": false` and an optional `reason`. The model sees the reason and answers the user.
 
-A paused run holds no tokens. Approving reserves them again, so it can return `429 budget-exceeded` or `429 too-many-runs` like a new message. Until you decide, new messages on that thread return `409 approval-pending`. An approval left for `APPROVAL_TTL_HOURS`, 24 by default, expires within the next hour: its run fails and the thread takes messages again. Each approval runs once: a second one returns `409 approval-not-pending`.
+A paused run holds no tokens. A decision reserves what's left of the run's `AGENT_RUN_TOKEN_LIMIT`, which caps the whole run, however many approvals it has. If the budget or `AGENT_MAX_CONCURRENT_RUNS` can't allow that, the run ends instead of staying paused: the stream sends an `error` event with the `budget-exceeded` or `too-many-runs` problem, then `done` with status `failed` and reason `budget_exceeded`. The tool isn't called, and the thread takes messages again. So a decline always frees the thread, however much budget is left.
+
+Until you decide, new messages on that thread return `409 approval-pending`. An approval left for `APPROVAL_TTL_HOURS`, 24 by default, expires within the next hour: its run fails and the thread takes messages again. Each decision counts once: a second one returns `409 approval-not-pending`.
 
 ## Read the stream in TypeScript
 

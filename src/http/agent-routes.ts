@@ -264,7 +264,10 @@ export function createAgentRoutes({
     }
   }
 
-  /** Streams one agent turn as server-sent events and settles the run row when it ends. */
+  /**
+   * Streams one segment of a run, up to its end or its next approval, as server-sent events, and
+   * settles the run row when it ends. The segment may spend what the run reserved for it.
+   */
   function streamRun(c: Context<AppEnv>, run: Run, resumed: boolean, start: StartRun) {
     const user = c.get('user');
     const requestId = c.get('requestId');
@@ -288,16 +291,21 @@ export function createAgentRoutes({
       },
     };
     let tokenLimitReached = false;
-    /** Stops before a step that could take the run past its reservation. */
+    /**
+     * Stops before a step that could take the segment past its reservation. A resumed segment
+     * starts by repeating the paused step, whose tokens the run already spent.
+     */
     const stopWhen: StopCondition = ({ steps }) => {
-      const agentTokens = steps.reduce(
-        (sum, step) => sum + (step.usage.inputTokens ?? 0) + (step.usage.outputTokens ?? 0),
-        0,
-      );
+      const agentTokens = steps
+        .slice(resumed ? 1 : 0)
+        .reduce(
+          (sum, step) => sum + (step.usage.inputTokens ?? 0) + (step.usage.outputTokens ?? 0),
+          0,
+        );
       const last = steps.at(-1)?.usage;
       const nextStep =
         (last?.inputTokens ?? 0) + (last?.outputTokens ?? 0) + limits.maxOutputTokens;
-      tokenLimitReached = agentTokens + tokensOf(spent.guardrail) + nextStep > budget.runTokenLimit;
+      tokenLimitReached = agentTokens + tokensOf(spent.guardrail) + nextStep > run.reservedTokens;
       return tokenLimitReached;
     };
 
@@ -393,6 +401,24 @@ export function createAgentRoutes({
         });
       },
     );
+  }
+
+  /** Streams the end of a run that stopped before it could resume. */
+  function endedRun(c: Context<AppEnv>, run: Run, problem: ProblemError) {
+    const runId = toPublicId('run', run.id);
+    metrics.run('failed', run.stopReason, 0);
+    return streamSSE(c, async (stream) => {
+      const send = (event: string, data: unknown) =>
+        stream.writeSSE({ event, data: JSON.stringify(data) });
+      await send('run', { runId, threadId: run.threadId });
+      await send('error', problem.toProblem(c.req.path));
+      await send('done', {
+        runId,
+        status: run.status,
+        reason: run.stopReason,
+        usage: summarize(noUsage()),
+      });
+    });
   }
 
   const tracing = () => ({ recordContent, ...activeTrace() });
@@ -582,13 +608,27 @@ export function createAgentRoutes({
         const run = runUuid ? await runs.find(user.userId, runUuid) : undefined;
         if (!run) throw new ProblemError('not-found', `Run ${id} does not exist.`);
         const { toolCallId, approved, reason } = c.req.valid('json');
-        if (!(await runs.claimApproval(run, toolCallId))) {
+        const claim = await runs.claimApproval(run.id, toolCallId);
+        if (!claim) {
           throw new ProblemError(
             'approval-not-pending',
             `Run ${id} isn't waiting for approval of tool call ${toolCallId}.`,
           );
         }
-        return streamRun(c, run, true, (signal, options) => {
+        if (claim.ended) {
+          const outcome = approved
+            ? `without calling ${claim.pending.toolName}`
+            : 'without a reply';
+          return endedRun(
+            c,
+            claim.run,
+            new ProblemError(
+              claim.ended.slug,
+              `Run ${id} ended ${outcome}, and its thread takes messages again. ${claim.ended.message}`,
+            ),
+          ) as never;
+        }
+        return streamRun(c, claim.run, true, (signal, options) => {
           const resume = {
             runId: run.id,
             toolCallId,

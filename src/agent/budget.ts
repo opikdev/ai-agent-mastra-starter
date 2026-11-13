@@ -96,6 +96,29 @@ export function createBudget(db: Db, limits: BudgetLimits) {
     return Number(row?.tokens ?? 0);
   }
 
+  /**
+   * Today's spent tokens and the user's held ones, read in one statement, so both come from the
+   * same snapshot. A step that settles moves tokens from held to spent in one transaction, so the
+   * sum never drops between two separate reads that could see either side of it.
+   */
+  async function committed(tx: Transaction, userId: string) {
+    const result = await tx.execute<{ spent: string; held: string }>(sql`
+      select
+        coalesce((
+          select ${tokenUsage.inputTokens} + ${tokenUsage.outputTokens}
+          from ${tokenUsage}
+          where ${tokenUsage.userId} = ${userId} and ${tokenUsage.day} = ${today}
+        ), 0) as spent,
+        coalesce((
+          select sum(${runs.reservedTokens})
+          from ${runs}
+          where ${runs.userId} = ${userId} and ${runs.status} = 'running'
+        ), 0) as held
+    `);
+    const row = result.rows[0];
+    return { spent: Number(row?.spent ?? 0), held: Number(row?.held ?? 0) };
+  }
+
   return {
     dailyTokens,
     runTokenLimit,
@@ -103,11 +126,11 @@ export function createBudget(db: Db, limits: BudgetLimits) {
     reserved,
 
     /**
-     * Holds `runTokenLimit` tokens for a run that's about to stream, inside the caller's
-     * transaction. A per-user lock serializes this check, so concurrent runs can't all pass it.
-     * Runs left running by a dead process are failed first, which frees what they held.
+     * Holds `tokens` for a run that's about to stream, inside the caller's transaction, and
+     * returns what it held. A per-user lock serializes this check, so concurrent runs can't all
+     * pass it. Runs left running by a dead process are failed first, which frees what they held.
      */
-    async reserve(tx: Transaction, userId: string): Promise<number> {
+    async reserve(tx: Transaction, userId: string, tokens: number): Promise<number> {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`budget:${userId}`}, 0))`,
       );
@@ -134,15 +157,14 @@ export function createBudget(db: Db, limits: BudgetLimits) {
         );
       }
 
-      const spent = tokensOf(summarize(await used(userId, tx)));
-      const held = await reserved(userId, tx);
-      if (spent + held + runTokenLimit <= dailyTokens) return runTokenLimit;
+      const { spent, held } = await committed(tx, userId);
+      if (spent + held + tokens <= dailyTokens) return tokens;
 
-      if (spent + runTokenLimit > dailyTokens) {
+      if (spent + tokens > dailyTokens) {
         const retryAfter = secondsUntilUtcMidnight();
         throw new ProblemError(
           'budget-exceeded',
-          `A run needs ${runTokenLimit} tokens free, and ${Math.max(0, dailyTokens - spent)} of today's ${dailyTokens} are left. The budget resets at 00:00 UTC, in ${retryAfter} seconds.`,
+          `A run needs ${tokens} tokens free, and ${Math.max(0, dailyTokens - spent)} of today's ${dailyTokens} are left. The budget resets at 00:00 UTC, in ${retryAfter} seconds.`,
           { headers: { 'Retry-After': String(retryAfter) } },
         );
       }
@@ -154,8 +176,8 @@ export function createBudget(db: Db, limits: BudgetLimits) {
     },
 
     /**
-     * Records tokens a run spent, and takes them off its reservation in the same transaction, so
-     * spent plus held never counts them twice.
+     * Records tokens a run spent, adds them to the run's total, and takes them off its
+     * reservation, in one transaction, so spent plus held never counts them twice.
      */
     async spend(runId: string, userId: string, role: UsageRole, usage: Usage): Promise<void> {
       const tokens = tokensOf(usage);
@@ -192,7 +214,10 @@ export function createBudget(db: Db, limits: BudgetLimits) {
           });
         await tx
           .update(runs)
-          .set({ reservedTokens: sql`greatest(0, ${runs.reservedTokens} - ${tokens})` })
+          .set({
+            reservedTokens: sql`greatest(0, ${runs.reservedTokens} - ${tokens})`,
+            spentTokens: sql`${runs.spentTokens} + ${tokens}`,
+          })
           .where(eq(runs.id, runId));
       });
     },

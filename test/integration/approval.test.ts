@@ -1,8 +1,10 @@
+import { eq } from 'drizzle-orm';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createMastra } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createDb, createPool } from '../../src/db/client.ts';
+import { runs, tokenUsage } from '../../src/db/schema.ts';
 import { createLogger } from '../../src/platform/logger.ts';
 import {
   eventsOf,
@@ -217,5 +219,86 @@ describe('tool approval', () => {
     } finally {
       await client.end();
     }
+  });
+});
+
+/** Tool calls in a model request that have no result, which the Messages API rejects. */
+function unansweredToolCalls(request: { messages: Array<{ content: unknown }> } | undefined) {
+  const blocks = (request?.messages ?? []).flatMap((message) =>
+    Array.isArray(message.content) ? (message.content as Array<Record<string, string>>) : [],
+  );
+  const answered = new Set(blocks.map((block) => block.tool_use_id));
+  return blocks.filter((block) => block.type === 'tool_use' && !answered.has(block.id));
+}
+
+describe('a decision the budget can’t resume', () => {
+  let low: TestStack;
+  beforeAll(async () => {
+    low = await startStack({
+      DAILY_TOKEN_BUDGET: '500',
+      AGENT_RUN_TOKEN_LIMIT: '200',
+      AGENT_MAX_OUTPUT_TOKENS: '50',
+    });
+  });
+  afterAll(() => low.close());
+
+  async function pauseWithBudgetSpent(user: TestUser) {
+    low.notesApi.notes.set(user.id, [
+      { id: 'note_1', title: 'Old', body: 'x', version: 1, createdAt: 'x', updatedAt: 'x' },
+    ]);
+    const thread = await user.createThread();
+    low.reply({ tool: { name: 'deleteNote', input: { id: 'note_1' } } });
+    const [approval] = eventsOf(await user.say(thread.id, 'Delete Old'), 'approval-required');
+    await low.db.update(tokenUsage).set({ inputTokens: 450 }).where(eq(tokenUsage.userId, user.id));
+    return { thread, approval };
+  }
+
+  it('ends the run on a decline, frees the thread, and refuses the decision twice', async () => {
+    const user = low.signUp();
+    const { thread, approval } = await pauseWithBudgetSpent(user);
+    const declined = await user.decide(approval.runId, approval.toolCallId, false);
+    expect(eventsOf(declined, 'error')[0]).toMatchObject({
+      type: 'urn:problem:budget-exceeded',
+      detail: expect.stringContaining(`Run ${approval.runId} ended without a reply`),
+    });
+    expect(eventsOf(declined, 'done')[0]).toMatchObject({
+      runId: approval.runId,
+      status: 'failed',
+      reason: 'budget_exceeded',
+    });
+
+    const again = await user.request(`/v1/runs/${approval.runId}/approval`, {
+      method: 'POST',
+      json: { toolCallId: approval.toolCallId, approved: false },
+    });
+    expect(again.status).toBe(409);
+    expect((await again.json()).type).toBe('urn:problem:approval-not-pending');
+
+    await low.db.delete(tokenUsage).where(eq(tokenUsage.userId, user.id));
+    low.reply({ text: 'Hello again.' });
+    const next = await user.say(thread.id, 'Never mind');
+    expect(eventsOf(next, 'done')[0].status).toBe('completed');
+    expect(unansweredToolCalls(low.anthropic.requests.at(-1))).toEqual([]);
+    expect(low.notesApi.notes.get(user.id)).toHaveLength(1);
+  });
+
+  it('ends the run on an approval without calling the tool', async () => {
+    const user = low.signUp();
+    const { thread, approval } = await pauseWithBudgetSpent(user);
+    const before = low.anthropic.requests.length;
+    const approved = await user.decide(approval.runId, approval.toolCallId, true);
+    expect(eventsOf(approved, 'error')[0].detail).toContain(
+      `Run ${approval.runId} ended without calling deleteNote`,
+    );
+    expect(eventsOf(approved, 'done')[0]).toMatchObject({ reason: 'budget_exceeded' });
+    expect(low.anthropic.requests.length).toBe(before);
+    expect(low.notesApi.notes.get(user.id)).toHaveLength(1);
+    const [row] = await low.db.select().from(runs).where(eq(runs.threadId, thread.id));
+    expect(row).toMatchObject({
+      status: 'failed',
+      stopReason: 'budget_exceeded',
+      pending: null,
+      reservedTokens: 0,
+    });
   });
 });

@@ -48,6 +48,7 @@ export const stopReasons = [
   'guardrail_unavailable',
   'model_error',
   'approval_expired',
+  'budget_exceeded',
   'thread_deleted',
   'stale',
   'error',
@@ -72,6 +73,8 @@ export const runs = pgTable(
     pending: jsonb('pending').$type<PendingApproval>(),
     /** Tokens held against the user's budget while the run streams. Zero once it settles. */
     reservedTokens: bigint('reserved_tokens', { mode: 'number' }).notNull().default(0),
+    /** Tokens the run spent across all its segments, which AGENT_RUN_TOKEN_LIMIT caps. */
+    spentTokens: bigint('spent_tokens', { mode: 'number' }).notNull().default(0),
     ...timestamps,
   },
   (table) => [
@@ -85,6 +88,7 @@ export const runs = pgTable(
       sql`(${table.status} = 'awaiting_approval') = (${table.pending} is not null)`,
     ),
     check('chk_runs_reserved_tokens', sql`${table.reservedTokens} >= 0`),
+    check('chk_runs_spent_tokens', sql`${table.spentTokens} >= 0`),
     uniqueIndex('uq_runs_open_thread')
       .on(table.threadId)
       .where(sql`status in ('running', 'awaiting_approval')`),

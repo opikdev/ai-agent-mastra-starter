@@ -14,6 +14,7 @@ CREATE TABLE "idempotency_keys" (
 ALTER TABLE "runs" DROP CONSTRAINT "chk_runs_status";--> statement-breakpoint
 ALTER TABLE "runs" ADD COLUMN "stop_reason" text;--> statement-breakpoint
 ALTER TABLE "runs" ADD COLUMN "reserved_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "runs" ADD COLUMN "spent_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "token_usage" ADD COLUMN "cache_read_input_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "token_usage" ADD COLUMN "cache_write_input_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "token_usage" ADD COLUMN "guardrail_cache_read_input_tokens" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
@@ -22,4 +23,5 @@ CREATE UNIQUE INDEX "uq_idempotency_keys_user_endpoint_key" ON "idempotency_keys
 CREATE INDEX "idx_idempotency_keys_expires_at" ON "idempotency_keys" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "idx_runs_running_user" ON "runs" USING btree ("user_id") WHERE status = 'running';--> statement-breakpoint
 ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_reserved_tokens" CHECK ("runs"."reserved_tokens" >= 0);--> statement-breakpoint
+ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_spent_tokens" CHECK ("runs"."spent_tokens" >= 0);--> statement-breakpoint
 ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_status" CHECK (status in ('running', 'awaiting_approval', 'completed', 'incomplete', 'refused', 'blocked', 'failed'));

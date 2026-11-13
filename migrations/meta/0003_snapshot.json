@@ -1,5 +1,5 @@
 {
-  "id": "d70ad0ab-ce4d-4641-9f2e-b12a9f175378",
+  "id": "59254316-4aff-45ed-b04a-59c0b6a2c034",
   "prevId": "6d09e51d-5dc7-4106-b68d-b3b1cf01c101",
   "version": "7",
   "dialect": "postgresql",
@@ -242,6 +242,13 @@
           "notNull": true,
           "default": 0
         },
+        "spent_tokens": {
+          "name": "spent_tokens",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -314,6 +321,10 @@
         "chk_runs_reserved_tokens": {
           "name": "chk_runs_reserved_tokens",
           "value": "\"runs\".\"reserved_tokens\" >= 0"
+        },
+        "chk_runs_spent_tokens": {
+          "name": "chk_runs_spent_tokens",
+          "value": "\"runs\".\"spent_tokens\" >= 0"
         }
       },
       "isRLSEnabled": false

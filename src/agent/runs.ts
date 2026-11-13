@@ -13,6 +13,17 @@ import type { Budget, Transaction } from './budget.ts';
 
 export type Run = typeof runs.$inferSelect;
 
+/**
+ * A decision on a paused tool call that won the claim. Without `ended`, the run streams again
+ * with `run.reservedTokens` to spend. With it, the budget couldn't cover the rest, so the run
+ * ended with reason `budget_exceeded` and `ended` says why.
+ */
+export interface ApprovalClaim {
+  run: Run;
+  pending: PendingApproval;
+  ended?: ProblemError;
+}
+
 /** Identifies a retried request: the user's key, scoped to an endpoint, and the request's hash. */
 export interface Idempotency {
   endpoint: string;
@@ -126,7 +137,7 @@ export function createRuns(db: Db, budget: Budget, staleAfterMs: number) {
             );
           }
           if (current) throw busy(threadId);
-          const reservedTokens = await budget.reserve(tx, userId);
+          const reservedTokens = await budget.reserve(tx, userId, budget.runTokenLimit);
           const [run] = await tx
             .insert(runs)
             .values({ userId, threadId, reservedTokens })
@@ -150,24 +161,46 @@ export function createRuns(db: Db, budget: Budget, staleAfterMs: number) {
     },
 
     /**
-     * Moves an awaiting run back to running and reserves its tokens. Only one of two concurrent
-     * approvals wins.
+     * Claims a paused run's decision, then reserves what's left of its token limit. Returns
+     * undefined unless the run awaits this tool call, so only one of two decisions wins, and a
+     * repeated one can't end the run. A run the budget can't resume ends instead of staying
+     * paused, which frees its thread.
      */
-    async claimApproval(run: Run, toolCallId: string): Promise<PendingApproval | undefined> {
+    async claimApproval(runId: string, toolCallId: string): Promise<ApprovalClaim | undefined> {
       return db.transaction(async (tx) => {
-        const reservedTokens = await budget.reserve(tx, run.userId);
-        const [claimed] = await tx
-          .update(runs)
-          .set({ status: 'running', pending: null, reservedTokens })
+        const [paused] = await tx
+          .select()
+          .from(runs)
           .where(
             and(
-              eq(runs.id, run.id),
+              eq(runs.id, runId),
               eq(runs.status, 'awaiting_approval'),
               sql`${runs.pending}->>'toolCallId' = ${toolCallId}`,
             ),
           )
-          .returning({ id: runs.id });
-        return claimed && run.pending ? run.pending : undefined;
+          .for('update');
+        if (!paused?.pending) return undefined;
+        const left = Math.max(0, budget.runTokenLimit - paused.spentTokens);
+        let reservedTokens: number;
+        try {
+          reservedTokens = await budget.reserve(tx, paused.userId, left);
+        } catch (error) {
+          if (!(error instanceof ProblemError)) throw error;
+          const [ended] = await tx
+            .update(runs)
+            .set({ status: 'failed', stopReason: 'budget_exceeded', pending: null })
+            .where(eq(runs.id, runId))
+            .returning();
+          if (!ended) throw new Error(`Run ${runId} vanished while locked`);
+          return { run: ended, pending: paused.pending, ended: error };
+        }
+        const [claimed] = await tx
+          .update(runs)
+          .set({ status: 'running', pending: null, reservedTokens })
+          .where(eq(runs.id, runId))
+          .returning();
+        if (!claimed) throw new Error(`Run ${runId} vanished while locked`);
+        return { run: claimed, pending: paused.pending };
       });
     },
 

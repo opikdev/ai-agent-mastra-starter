@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createBudget, emptyUsage, type Transaction } from '../../src/agent/budget.ts';
 import { runs } from '../../src/db/schema.ts';
+import { ProblemError } from '../../src/platform/problem.ts';
 import { eventsOf, json, readSse, startStack, type TestStack, type TestUser } from '../helpers.ts';
 
 async function usageOf(user: TestUser) {
@@ -134,6 +136,103 @@ describe('the token limit of a run', () => {
     expect(stack.anthropic.requests.length).toBe(before + 1);
     const [row] = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
     expect(row).toMatchObject({ status: 'incomplete', stopReason: 'token_limit' });
+  });
+});
+
+describe('the token limit of a run with approvals', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack({
+      DAILY_TOKEN_BUDGET: '400',
+      AGENT_RUN_TOKEN_LIMIT: '300',
+      AGENT_MAX_OUTPUT_TOKENS: '50',
+    });
+  });
+  afterAll(() => stack.close());
+
+  it('caps the whole run, and resumes it with only what it has left', async () => {
+    const user = stack.signUp();
+    stack.notesApi.notes.set(user.id, [
+      { id: 'note_1', title: 'Old', body: 'x', version: 1, createdAt: 'x', updatedAt: 'x' },
+    ]);
+    const thread = await user.createThread();
+    stack.reply({ tool: { name: 'deleteNote', input: { id: 'note_1' } } });
+    const [approval] = eventsOf(await user.say(thread.id, 'Delete Old'), 'approval-required');
+
+    const before = stack.anthropic.requests.length;
+    stack.reply({ tool: { name: 'listNotes', input: {} } }, { text: 'Never sent.' });
+    const resumed = await user.decide(approval.runId, approval.toolCallId, true);
+    stack.anthropic.replies.length = 0;
+    expect(eventsOf(resumed, 'done')[0]).toMatchObject({
+      status: 'incomplete',
+      reason: 'token_limit',
+      usage: { inputTokens: 100, outputTokens: 20 },
+    });
+    expect(stack.anthropic.requests.length).toBe(before + 1);
+    const [row] = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
+    expect(row).toMatchObject({ spentTokens: 240, reservedTokens: 0 });
+  });
+});
+
+describe('a step that settles while a run reserves', () => {
+  let stack: TestStack;
+  beforeAll(async () => {
+    stack = await startStack();
+  });
+  afterAll(() => stack.close());
+
+  /** Runs `settle` on another connection just before the transaction's `nth` query runs. */
+  function settlingBefore(tx: Transaction, nth: number, settle: () => Promise<void>) {
+    let queries = 0;
+    const track = <T extends object>(target: T): T =>
+      new Proxy(target, {
+        get(object, property) {
+          const member = Reflect.get(object, property, object);
+          if (typeof member !== 'function') return member;
+          if (property === 'then') {
+            return (resolve: (value: unknown) => void, reject: (error: unknown) => void) => {
+              queries += 1;
+              const first = queries === nth ? settle() : Promise.resolve();
+              return first.then(() => member.call(object, resolve, reject));
+            };
+          }
+          return (...args: unknown[]) => {
+            const result = member.apply(object, args);
+            return typeof result === 'object' && result !== null ? track(result) : result;
+          };
+        },
+      });
+    return track(tx);
+  }
+
+  it('never admits a run past the budget, wherever the step lands', async () => {
+    const budget = createBudget(stack.db, {
+      dailyTokens: 1000,
+      runTokenLimit: 400,
+      maxConcurrentRuns: 5,
+      staleAfterMs: 600_000,
+    });
+    let settled = 0;
+    for (let nth = 1; nth <= 6; nth += 1) {
+      const user = stack.signUp();
+      const [streaming] = await stack.db
+        .insert(runs)
+        .values({ userId: user.id, threadId: `thr_${randomUUID()}`, reservedTokens: 400 })
+        .returning();
+      await budget.spend(randomUUID(), user.id, 'agent', { ...emptyUsage(), inputTokens: 300 });
+      const settle = async () => {
+        settled += 1;
+        await budget.spend(streaming?.id as string, user.id, 'agent', {
+          ...emptyUsage(),
+          inputTokens: 300,
+        });
+      };
+      const attempt = stack.db.transaction((tx) =>
+        budget.reserve(settlingBefore(tx, nth, settle), user.id, 400),
+      );
+      await expect(attempt).rejects.toBeInstanceOf(ProblemError);
+    }
+    expect(settled).toBeGreaterThanOrEqual(4);
   });
 });
 

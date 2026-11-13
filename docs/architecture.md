@@ -13,7 +13,7 @@ The service is a small Hono API in front of one Mastra agent. Hono owns HTTP: au
 7. **Relay.** `src/agent/relay.ts` turns Mastra chunks into server-sent events, and each finished step moves its tokens from the reservation to the day's usage.
 8. **Settle.** The run's finish reason sets its status, as [decision 010](decisions/010-report-why-a-run-stopped.md) explains, and the run frees what's left of its reservation. A paused run is saved as `awaiting_approval` before the client gets `approval-required`, so it can approve at once.
 
-An approval reserves tokens again, then resumes the same run from its Postgres snapshot, so it works after a restart or on another instance.
+An approval claims the paused run, reserves what's left of its token limit, then resumes the same run from its Postgres snapshot, so it works after a restart or on another instance. If the budget can't cover the rest, the run ends instead, which frees the thread.
 
 ## Modules
 
@@ -62,7 +62,7 @@ flowchart LR
 
 Postgres holds two schemas:
 
-- `public`: the app's tables, managed by Drizzle. `runs`, with each run's status, stop reason, and reserved tokens; `token_usage`; `idempotency_keys`; and `rate_limits`.
+- `public`: the app's tables, managed by Drizzle. `runs`, with each run's status, stop reason, and reserved and spent tokens; `token_usage`; `idempotency_keys`; and `rate_limits`.
 - `mastra`: Mastra's tables for threads, messages, and approval snapshots. `src/db/migrate.ts` creates and upgrades them.
 
 The app connects as `agent_app`, which can read and write rows but can't change the schema. Migrations run as the owner.
