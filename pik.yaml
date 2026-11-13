@@ -30,6 +30,9 @@ replace:
   - from: "@opikdev"
     to: "@{{owner}}"
     files: [.github/CODEOWNERS]
+  - from: "# AI agent Mastra starter\n"
+    to: "# {{name}}\n"
+    files: [README.md]
   - from: ai-agent-mastra-starter
     to: "{{name}}"
     files:
@@ -40,11 +43,16 @@ replace:
       - docs/operations.md
       - test/e2e/stack.test.ts
       - test/integration/tracing.test.ts
+      - test/integration/api-docs.test.ts
+      - src/instrumentation.ts
 exclude:
   - .baseline.sha256
   - .github/workflows/baseline-check.yml
 setup:
   - pnpm install
+  - pnpm pkg set version=0.1.0
+  - printf '# Changelog\n\nAll notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).\n\n## [Unreleased]\n' > CHANGELOG.md
+  - pnpm openapi:generate
   - pnpm exec biome format --write .
 next:
   - export ANTHROPIC_API_KEY=<YOUR_KEY>

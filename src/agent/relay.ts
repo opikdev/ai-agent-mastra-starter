@@ -1,5 +1,5 @@
 import type { ChunkType } from '@mastra/core/stream';
-import type { PendingApproval } from '../db/schema.ts';
+import type { PendingApproval, StopReason } from '../db/schema.ts';
 import type { Usage } from './budget.ts';
 
 export type RelayEvent =
@@ -9,12 +9,28 @@ export type RelayEvent =
   | { event: 'tool-error'; data: { toolCallId: string; toolName: string; detail: string } }
   | { event: 'blocked'; data: { reason: string } };
 
-export type RelayStatus = 'completed' | 'awaiting_approval' | 'blocked' | 'failed' | 'aborted';
+export type RelayStatus =
+  | 'completed'
+  | 'incomplete'
+  | 'refused'
+  | 'awaiting_approval'
+  | 'blocked'
+  | 'failed'
+  | 'aborted';
+
+/** How the model said its last step ended: the AI SDK's reason and the provider's own. */
+export interface FinishReason {
+  reason: string;
+  raw: string | undefined;
+}
 
 export interface RelayResult {
   status: RelayStatus;
   pending?: PendingApproval;
   error?: unknown;
+  /** The guardrail's reason, for a blocked message. */
+  blockReason?: string;
+  finish?: FinishReason;
 }
 
 interface RelayOptions {
@@ -23,10 +39,21 @@ interface RelayOptions {
   onToolError: (error: unknown) => void;
 }
 
-function usageOf(
-  usage: { inputTokens?: number | undefined; outputTokens?: number | undefined } | undefined,
-): Usage {
-  return { inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0 };
+interface StepUsage {
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  cachedInputTokens?: number | undefined;
+  cacheCreationInputTokens?: number | undefined;
+}
+
+/** A Mastra step's usage. Its input total already includes the cached tokens. */
+export function stepUsageOf(usage: StepUsage | undefined): Usage {
+  return {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+    cacheReadInputTokens: usage?.cachedInputTokens ?? 0,
+    cacheWriteInputTokens: usage?.cacheCreationInputTokens ?? 0,
+  };
 }
 
 /**
@@ -42,10 +69,38 @@ export function stepUsage(
   { resumed }: { resumed: boolean },
 ) {
   let skipNext = resumed;
-  return async (step: { usage?: Parameters<typeof usageOf>[0] }) => {
+  return async (step: { usage?: StepUsage }) => {
     if (skipNext) skipNext = false;
-    else await record(usageOf(step.usage));
+    else await record(stepUsageOf(step.usage));
   };
+}
+
+export interface Outcome {
+  status: RelayStatus;
+  reason: StopReason | null;
+}
+
+/**
+ * Turns how the stream ended into the run's status. A reply the model stopped at its output cap
+ * is `incomplete`, and one it declined is `refused`, never `completed`. A run that ends on a tool
+ * call, without pausing for approval, ran out of steps or of tokens.
+ */
+export function outcomeOf(result: RelayResult, { tokenLimitReached = false } = {}): Outcome {
+  if (result.status !== 'completed') return { status: result.status, reason: null };
+  switch (result.finish?.reason) {
+    case 'length':
+      return {
+        status: 'incomplete',
+        reason:
+          result.finish.raw === 'model_context_window_exceeded' ? 'context_window' : 'max_tokens',
+      };
+    case 'content-filter':
+      return { status: 'refused', reason: 'refusal' };
+    case 'tool-calls':
+      return { status: 'incomplete', reason: tokenLimitReached ? 'token_limit' : 'max_steps' };
+    default:
+      return { status: 'completed', reason: null };
+  }
 }
 
 /**
@@ -53,7 +108,8 @@ export function stepUsage(
  * approval.
  *
  * A pending approval is returned, not sent, because the caller must save it before the client
- * can approve it.
+ * can approve it. A guardrail block is returned too, because the caller decides whether it was a
+ * verdict or a failed check.
  */
 export async function relay(
   chunks: AsyncIterable<ChunkType<undefined>>,
@@ -103,13 +159,18 @@ export async function relay(
           toolName: chunk.payload.toolName,
           args: chunk.payload.args,
         };
-        await record(usageOf(chunk.payload.usage));
+        await record(stepUsageOf(chunk.payload.usage));
         result = { status: 'awaiting_approval', pending };
         break;
       }
+      case 'finish':
+        result.finish = {
+          reason: String(chunk.payload.stepResult.reason),
+          raw: (chunk.payload.stepResult as { rawReason?: string }).rawReason,
+        };
+        break;
       case 'tripwire':
-        result = { status: 'blocked' };
-        await send({ event: 'blocked', data: { reason: chunk.payload.reason } });
+        result = { status: 'blocked', blockReason: chunk.payload.reason };
         break;
       case 'abort':
         result = { status: 'aborted' };

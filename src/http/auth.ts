@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createMiddleware } from 'hono/factory';
 import { createNotesClient, type NotesClient, UpstreamError } from '../notes/client.ts';
 import { ProblemError } from '../platform/problem.ts';
-import type { AppEnv } from './env.ts';
+import type { AppEnv } from './router.ts';
 
 interface AuthOptions {
   notesApiUrl: string;
@@ -12,6 +12,7 @@ interface AuthOptions {
 }
 
 const maxTokenLength = 512;
+const bearerScheme = /^bearer +(\S+)$/i;
 const maxCachedTokens = 10_000;
 
 function unauthorized(detail: string) {
@@ -58,10 +59,8 @@ export function createRequireAuth({
   }
 
   return createMiddleware<AppEnv>(async (c, next) => {
-    const [scheme, token, ...rest] = (c.req.header('authorization') ?? '').split(' ');
-    if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) {
-      throw unauthorized('Send a notes API token as Authorization: Bearer <token>.');
-    }
+    const token = bearerScheme.exec(c.req.header('authorization') ?? '')?.[1];
+    if (!token) throw unauthorized('Send a notes API token as Authorization: Bearer <token>.');
     if (token.length > maxTokenLength) throw unauthorized('The token is too long.');
     const notes = createNotesClient({
       baseUrl: notesApiUrl,

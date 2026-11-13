@@ -10,11 +10,14 @@ Every error is [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Detail
 | `thread-busy` | 409 | The thread is still answering a message | Wait for `done`, then retry |
 | `approval-pending` | 409 | The thread waits for a tool approval | Approve or decline the pending call |
 | `approval-not-pending` | 409 | That run isn't waiting for this tool call, or it was already decided | Check `runId` and `toolCallId` |
+| `duplicate-request` | 409 | A request with this `Idempotency-Key` already started a run. `runId` names it | Read the reply with `GET /v1/threads/{id}` instead of sending again |
 | `payload-too-large` | 413 | The body is over 64 KiB | Send less |
 | `unsupported-media-type` | 415 | The body isn't JSON | Send `Content-Type: application/json` |
+| `idempotency-key-reused` | 422 | The `Idempotency-Key` was used within 24 hours for a different request | Use a new key for each new message |
 | `rate-limited` | 429 | Too many requests this minute | Wait for `Retry-After` |
-| `budget-exceeded` | 429 | Today's token budget is spent | Wait for `Retry-After`, at 00:00 UTC |
+| `budget-exceeded` | 429 | Today's budget has less than `AGENT_RUN_TOKEN_LIMIT` tokens left for a new run, counting what your streaming runs hold | Wait for `Retry-After`: 00:00 UTC, or 5 seconds when your other runs hold the tokens |
+| `too-many-runs` | 429 | You already have `AGENT_MAX_CONCURRENT_RUNS` runs streaming | Wait for one to send `done`, then retry after `Retry-After` |
 | `internal-error` | 500 | A bug. `detail` has a request ID | Quote the request ID |
-| `service-unavailable` | 503 | Postgres, the notes API, or the model provider failed, the run timed out, or the server shut down during the run | Retry later |
+| `service-unavailable` | 503 | Postgres, the notes API, the model provider, or the prompt injection check failed, the run timed out, the server shut down during the run, or it's draining | Retry later |
 
 `src/platform/problem.ts` is the source of truth for slugs and statuses. `test/unit/problem.test.ts` fails if this table and it differ.

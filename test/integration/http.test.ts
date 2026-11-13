@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Assistant } from '../../src/agent/mastra.ts';
 import { createApp } from '../../src/app.ts';
 import { createLogger } from '../../src/platform/logger.ts';
@@ -11,6 +13,28 @@ beforeAll(async () => {
 afterAll(() => stack.close());
 
 describe('http', () => {
+  it('boots and answers with the values shipped in .env.example', async () => {
+    const shipped = parseEnv(readFileSync('.env.example', 'utf8')) as Record<string, string>;
+    const booted = await startStack({
+      ...shipped,
+      DATABASE_URL: inject('databaseUrl'),
+      NOTES_API_URL: 'http://notes.test',
+      ANTHROPIC_API_KEY: 'test-anthropic-key',
+      LOG_LEVEL: 'silent',
+      // app.request() has no socket, so the client IP must come from X-Forwarded-For.
+      TRUST_PROXY_HOPS: '1',
+    });
+    try {
+      expect((await booted.app.request('/readyz')).status).toBe(200);
+      const user = booted.signUp();
+      const thread = await user.createThread();
+      const events = await user.say(thread.id, 'Hi');
+      expect(events.at(-1)).toMatchObject({ event: 'done', data: { status: 'completed' } });
+    } finally {
+      await booted.close();
+    }
+  });
+
   it('answers CORS preflights for allowed origins', async () => {
     const response = await stack.app.request('/v1/threads', {
       method: 'OPTIONS',
@@ -33,16 +57,57 @@ describe('http', () => {
     const exposed = response.headers.get('access-control-expose-headers')?.split(',') ?? [];
     expect(exposed.map((header) => header.trim().toLowerCase()).sort()).toEqual([
       'location',
-      'ratelimit-limit',
-      'ratelimit-remaining',
-      'ratelimit-reset',
+      'ratelimit',
+      'ratelimit-policy',
       'retry-after',
       'www-authenticate',
       'x-request-id',
     ]);
-    for (const header of ['x-request-id', 'location', 'ratelimit-limit', 'ratelimit-reset']) {
+    for (const header of ['x-request-id', 'location', 'ratelimit', 'ratelimit-policy']) {
       expect(response.headers.get(header), header).toBeTruthy();
     }
+  });
+
+  it('marks /v1 responses no-store, and every response with a deny-all CSP', async () => {
+    const user = stack.signUp();
+    const response = await user.request('/v1/threads');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; frame-ancestors 'none'",
+    );
+    const health = await stack.app.request('/healthz');
+    expect(health.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; frame-ancestors 'none'",
+    );
+    const problem = await stack.app.request('/v1/threads', {
+      headers: { 'X-Forwarded-For': uniqueIp() },
+    });
+    expect(problem.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it.each([
+    ['text/plain', 'text/plain'],
+    ['a form, as curl -d sends by default', 'application/x-www-form-urlencoded'],
+  ])('rejects %s with 415, not 500', async (_label, contentType) => {
+    const user = stack.signUp();
+    const response = await user.request('/v1/threads', {
+      method: 'POST',
+      body: 'title=x',
+      headers: { 'Content-Type': contentType },
+    });
+    expect(response.status).toBe(415);
+    expect((await json(response)).type).toBe('urn:problem:unsupported-media-type');
+  });
+
+  it('rejects malformed JSON with 400', async () => {
+    const user = stack.signUp();
+    const response = await user.request('/v1/threads', {
+      method: 'POST',
+      body: '{ nope',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(response.status).toBe(400);
+    expect((await json(response)).detail).toContain('not valid JSON');
   });
 
   it('rejects a body over 64 KiB', async () => {

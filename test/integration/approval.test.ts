@@ -7,9 +7,11 @@ import { createLogger } from '../../src/platform/logger.ts';
 import {
   eventsOf,
   readSse,
+  runUsage,
   startStack,
   type TestStack,
   type TestUser,
+  tokens,
   uniqueIp,
 } from '../helpers.ts';
 
@@ -99,25 +101,22 @@ describe('tool approval', () => {
     const { approval } = await askToDelete(user);
     stack.reply({ text: 'Deleted.' });
     const resumed = await user.decide(approval.runId, approval.toolCallId, true);
-    expect(eventsOf(resumed, 'done')[0].usage).toEqual({
-      inputTokens: 100,
-      outputTokens: 20,
-      agent: { inputTokens: 100, outputTokens: 20 },
-      guardrail: { inputTokens: 0, outputTokens: 0 },
-    });
+    expect(eventsOf(resumed, 'done')[0].usage).toEqual(runUsage(tokens(100, 20)));
     const usage = await (await user.request('/v1/usage')).json();
     expect(usage).toMatchObject({ inputTokens: 200, outputTokens: 40 });
   });
 
   it('refuses a new message while an approval is pending', async () => {
     const user = stack.signUp();
-    const { thread } = await askToDelete(user);
+    const { thread, approval } = await askToDelete(user);
     const response = await user.request(`/v1/threads/${thread.id}/messages`, {
       method: 'POST',
       json: { content: 'Something else' },
     });
     expect(response.status).toBe(409);
-    expect((await response.json()).type).toBe('urn:problem:approval-pending');
+    const problem = await response.json();
+    expect(problem.type).toBe('urn:problem:approval-pending');
+    expect(problem.detail).toContain(`Run ${approval.runId} is waiting`);
   });
 
   it('runs an approval once, even when it arrives twice', async () => {

@@ -21,7 +21,7 @@ The agent has no login and no credential of its own. Callers get a token from th
 
 ## Requests
 
-Every request sends `Accept: application/json` and `Authorization: Bearer <token>`. Paths are relative to `NOTES_API_URL`, which may include a base path, such as `https://example.com/api`. The agent reads only the fields listed, and ignores the rest.
+Every request sends `Accept: application/json` and `Authorization: Bearer <token>`, and `traceparent` while tracing is on, so the API's spans can join the agent's trace. The API may ignore it. Paths are relative to `NOTES_API_URL`, which may include a base path, such as `https://example.com/api`. The agent reads only the fields listed, and ignores the rest.
 
 | Call | Sends | Expects |
 |---|---|---|

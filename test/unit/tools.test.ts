@@ -86,6 +86,7 @@ describe('notes tools', () => {
       model: 'anthropic/claude-sonnet-5-5',
       guardrailModel: 'off',
       memoryMessages: 5,
+      guardrailOnError: 'block',
     });
     await expect(agent.stream('hi')).rejects.toThrow('notes client');
   });
