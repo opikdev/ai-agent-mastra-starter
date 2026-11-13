@@ -1,10 +1,11 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { inject } from 'vitest';
-import { createMastra } from '../src/agent/mastra.ts';
+import { type Assistant, createMastra } from '../src/agent/mastra.ts';
 import { createApp } from '../src/app.ts';
 import { type Config, loadConfig } from '../src/config.ts';
 import { createDb, createPool, type Db } from '../src/db/client.ts';
 import { createLogger } from '../src/platform/logger.ts';
+import type { Readiness } from '../src/platform/shutdown.ts';
 import { type FakeAnthropic, type Reply, startFakeAnthropic } from './fake-anthropic.ts';
 import { createFakeNotesApi, type FakeNotesApi } from './fake-notes-api.ts';
 
@@ -61,10 +62,12 @@ export interface TestStack {
   notesApi: FakeNotesApi;
   config: Config;
   db: Db;
+  agent: Assistant;
   app: ReturnType<typeof createApp>;
   logs: string[];
-  /** Aborting it is what SIGTERM does to the real server. */
+  /** Aborting it is what the shutdown timeout does to the real server's runs. */
   shutdown: AbortController;
+  readiness: Readiness;
   signUp: () => TestUser;
   reply: (...replies: Reply[]) => void;
   close: () => Promise<void>;
@@ -118,7 +121,9 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
   });
   const { mastra, agent } = createMastra(config, pool);
   const shutdown = new AbortController();
+  const readiness: Readiness = { draining: false };
   const app = createApp({
+    readiness,
     config,
     db,
     logger,
@@ -170,9 +175,11 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
     notesApi,
     config,
     db,
+    agent,
     app,
     logs,
     shutdown,
+    readiness,
     signUp,
     reply: (...replies) => {
       anthropic.replies.push(...replies);
@@ -186,4 +193,26 @@ export async function startStack(env: Record<string, string> = {}): Promise<Test
 
 export function eventsOf(events: SseEvent[], name: string) {
   return events.filter((event) => event.event === name).map((event) => event.data);
+}
+
+/** One model role's usage, as the API reports it. */
+export function tokens(
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadInputTokens = 0,
+  cacheWriteInputTokens = 0,
+) {
+  return { inputTokens, outputTokens, cacheReadInputTokens, cacheWriteInputTokens };
+}
+
+/** A run's or day's usage: totals across the agent and the guardrail, plus each one's share. */
+export function runUsage(agent = tokens(0, 0), guardrail = tokens(0, 0)) {
+  return {
+    inputTokens: agent.inputTokens + guardrail.inputTokens,
+    outputTokens: agent.outputTokens + guardrail.outputTokens,
+    cacheReadInputTokens: agent.cacheReadInputTokens + guardrail.cacheReadInputTokens,
+    cacheWriteInputTokens: agent.cacheWriteInputTokens + guardrail.cacheWriteInputTokens,
+    agent,
+    guardrail,
+  };
 }

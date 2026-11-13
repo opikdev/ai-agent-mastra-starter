@@ -1,3 +1,4 @@
+import { isSpanContextValid, trace } from '@opentelemetry/api';
 import { type DestinationStream, pino } from 'pino';
 
 export const logRedactions = [
@@ -32,8 +33,19 @@ export function serializeError(error: unknown): Record<string, unknown> {
 /** Shared by the app's logger and Mastra's, which logs errors under `error`. */
 export const logSerializers = { err: serializeError, error: serializeError };
 
+/** The active span's IDs, so a log line links to its trace. */
+function traceContext() {
+  const context = trace.getActiveSpan()?.spanContext();
+  return context && isSpanContextValid(context)
+    ? { trace_id: context.traceId, span_id: context.spanId }
+    : {};
+}
+
 export function createLogger(level: string, destination?: DestinationStream) {
-  return pino({ level, redact: logRedactions, serializers: logSerializers }, destination);
+  return pino(
+    { level, redact: logRedactions, serializers: logSerializers, mixin: traceContext },
+    destination,
+  );
 }
 
 export type Logger = ReturnType<typeof createLogger>;

@@ -29,6 +29,10 @@ To serve several agents from one deployment instead:
 3. In `ownThread()`, read `thread.metadata.agentId`, and run that agent for messages and approvals on the thread.
 4. Test that each thread only ever runs its own agent, and document the new field in `docs/api.md`.
 
+## Change an endpoint
+
+Routes in `src/http/agent-routes.ts` are `createRoute()` definitions, so the OpenAPI document follows them. Declare the problems a route returns with `problemResponses()`. `describeApi()` in `src/http/openapi.ts` adds the ones middleware returns. Then run `pnpm openapi:generate` and commit `openapi.json`, or the tests fail.
+
 ## Add a tool
 
 1. Add a client method for the outside call, with a timeout, an optional `signal`, and a response schema, as in `src/notes/client.ts`. Throw `UpstreamError` with a message the model can act on.
@@ -61,13 +65,13 @@ Mastra's `MCPClient` from `@mastra/mcp` turns an MCP server's tools into agent t
 
 ## Change the guardrails
 
-Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message. Give it `countedGuardrailModel(id)` from `src/agent/guardrail-usage.ts` as its model, so its tokens count toward the budget as guardrail tokens.
+Input processors are in `guardrails()` in `src/agent/notes-assistant.ts`. Mastra also ships PII, moderation, and system prompt leak detectors, in `@mastra/core/processors`. Each LLM-based detector adds a model call per message. Give it `monitoredGuardrailModel(id)` from `src/agent/guardrail-usage.ts` as its model, so its tokens count toward the budget as guardrail tokens and its failures reach the run. Set its `errorStrategy` from `GUARDRAIL_ON_ERROR`, as `guardrails()` does.
 
-The prompt injection check fails open: if Haiku is down, messages go through. Approvals and acting as the user are the real defense, because they cap what an injected instruction can do.
+The prompt injection check fails closed by default: if Haiku is down, messages fail with `guardrail_unavailable`. `GUARDRAIL_ON_ERROR=allow` lets them through instead. Either way, approvals and acting as the user are the real defense, because they cap what an injected instruction can do.
 
 ## Upgrade Mastra
 
-`@mastra/core` is pinned to an exact version, because `src/agent/relay.ts` and the evals rely on details that can change in any release: stream chunk shapes, the repeated usage after a resumed approval, the guardrail's dynamic model and its usage shape in `src/agent/guardrail-usage.ts`, and eval results keyed by check type. The other `@mastra/*` packages follow it.
+`@mastra/core` is pinned to an exact version, because `src/agent/relay.ts` and the evals rely on details that can change in any release: stream chunk shapes, the finish chunk's `stepResult.reason` and `rawReason`, the repeated usage after a resumed approval, `stopWhen` running alongside `maxSteps`, the guardrail's dynamic model, its usage shape, and its `errorStrategy` in `src/agent/guardrail-usage.ts` and `notes-assistant.ts`, `tracingOptions`, Anthropic's `cacheControl` provider option, and eval results keyed by check type. The other `@mastra/*` packages follow it.
 
 1. Bump `@mastra/core` and the other `@mastra/*` packages together.
 2. Read Mastra's changelog for stream, approval, memory, and storage changes.

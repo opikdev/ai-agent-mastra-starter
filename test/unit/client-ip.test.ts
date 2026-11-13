@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
-import { clientIp } from '../../src/http/client-ip.ts';
+import { clientIp, clientNetwork } from '../../src/http/client-ip.ts';
 
 const socketAddress = '198.51.100.7';
 
@@ -42,4 +42,22 @@ describe('clientIp', () => {
       expect(await ipFor(1, header)).toBe(socketAddress);
     },
   );
+});
+
+describe('clientNetwork', () => {
+  it.each([
+    ['198.51.100.7', '198.51.100.7'],
+    ['::ffff:198.51.100.7', '198.51.100.7'],
+    ['::ffff:c633:6407', '198.51.100.7'],
+    ['2001:db8:1:2:3:4:5:6', '2001:db8:1:2::/64'],
+    ['2001:0db8:0001:0002:ffff:ffff:ffff:ffff', '2001:db8:1:2::/64'],
+    ['2001:db8::1', '2001:db8::/64'],
+    ['2001:db8:0:0:1::', '2001:db8::/64'],
+    ['::1', '::/64'],
+    ['fe80::1%eth0', 'fe80::/64'],
+    ['64:ff9b::198.51.100.7', '64:ff9b::/64'],
+    ['unknown', 'unknown'],
+  ])('counts %s as %s', (address, network) => {
+    expect(clientNetwork(address)).toBe(network);
+  });
 });

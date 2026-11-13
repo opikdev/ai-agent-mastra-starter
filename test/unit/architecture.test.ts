@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = resolve('src');
-const entryPoints = ['index.ts', 'app.ts', 'db/migrate.ts'];
+const entryPoints = ['index.ts', 'app.ts', 'instrumentation.ts', 'db/migrate.ts'];
 
 const allowedAreas: Record<string, string[]> = {
   'config.ts': [],

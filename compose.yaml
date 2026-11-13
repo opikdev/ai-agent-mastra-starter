@@ -19,8 +19,11 @@ services:
       timeout: 3s
       retries: 90
 
+  # Builds the image that agent reuses, so Compose builds it once.
   migrate:
+    image: ai-agent-mastra-starter:local
     build: .
+    read_only: true
     command: [node, src/db/migrate.ts]
     environment:
       MIGRATION_DATABASE_URL: postgres://agent_owner:agent_owner_dev_password@db:5432/agent
@@ -29,15 +32,23 @@ services:
         condition: service_healthy
 
   agent:
-    build: .
+    image: ai-agent-mastra-starter:local
+    pull_policy: never
+    read_only: true
+    # Above the drain plus shutdown timeout, plus time to save aborted runs.
+    stop_grace_period: 50s
     environment:
       DATABASE_URL: postgres://agent_app:agent_app_dev_password@db:5432/agent
       NOTES_API_URL: http://notes-api:3000
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
       AGENT_MODEL: ${AGENT_MODEL:-anthropic/claude-sonnet-5-5}
       GUARDRAIL_MODEL: ${GUARDRAIL_MODEL:-anthropic/claude-haiku-5-5}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      DOCS_ENABLED: "true"
+      # No value passes the host's variable when it's set, and leaves it unset when it isn't.
+      ANTHROPIC_API_KEY:
+      ANTHROPIC_BASE_URL:
+      OTEL_EXPORTER_OTLP_ENDPOINT:
+      SHUTDOWN_DRAIN_SECONDS:
+      SHUTDOWN_TIMEOUT_SECONDS:
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:

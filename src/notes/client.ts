@@ -1,3 +1,4 @@
+import { context, propagation } from '@opentelemetry/api';
 import { z } from 'zod';
 
 const noteSchema = z.object({
@@ -99,11 +100,19 @@ export function createNotesClient({
 
   async function send(path: string, init: RequestInit = {}, signal?: AbortSignal) {
     const timeout = AbortSignal.timeout(timeoutMs);
+    // Adds `traceparent` while a trace is active, so the notes API's spans join the agent's.
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
     let response: Response;
     try {
       response = await fetcher(new URL(path, root), {
         ...init,
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...init.headers },
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...traceHeaders,
+          ...init.headers,
+        },
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (error) {

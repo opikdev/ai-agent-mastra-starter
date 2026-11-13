@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+export type StopReason = 'end_turn' | 'max_tokens' | 'refusal';
+
 export type Reply =
-  | { text: string; thinking?: boolean }
+  | { text: string; thinking?: boolean; stopReason?: StopReason }
   | { tool: { name: string; input: Record<string, unknown> }; thinking?: boolean }
   | { status: number; error: string };
 
@@ -19,7 +21,7 @@ export interface FakeAnthropic {
   replies: Reply[];
   /** Injection scores for the next guardrail calls. Unscripted calls score 0, and -1 fails. */
   guardScores: number[];
-  usage: { input: number; output: number };
+  usage: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
   delayMs: number;
   guardDelayMs: number;
   close(): Promise<void>;
@@ -85,7 +87,12 @@ export async function startFakeAnthropic(
 
   const server = createServer(async (req, res) => {
     const body = JSON.parse((await read(req)) || '{}') as AnthropicRequest;
-    const usage = { input_tokens: fake.usage.input, output_tokens: fake.usage.output };
+    const usage = {
+      input_tokens: fake.usage.input,
+      output_tokens: fake.usage.output,
+      cache_read_input_tokens: fake.usage.cacheRead ?? 0,
+      cache_creation_input_tokens: fake.usage.cacheWrite ?? 0,
+    };
 
     if ((body.output_config as { format?: unknown } | undefined)?.format) {
       fake.guardRequests.push(body);
@@ -132,7 +139,7 @@ export async function startFakeAnthropic(
 
     const id = `toolu_${fake.requests.length}`;
     const content = blocks(reply, id);
-    const stopReason = 'text' in reply ? 'end_turn' : 'tool_use';
+    const stopReason = 'text' in reply ? (reply.stopReason ?? 'end_turn') : 'tool_use';
     const message = { id: `msg_${fake.requests.length}`, type: 'message', role: 'assistant' };
 
     if (body.stream !== true) {

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runs } from '../../src/db/schema.ts';
 import { fakeSignature } from '../fake-anthropic.ts';
-import { eventsOf, readSse, startStack, type TestStack } from '../helpers.ts';
+import { eventsOf, readSse, runUsage, startStack, type TestStack, tokens } from '../helpers.ts';
 
 let stack: TestStack;
 beforeAll(async () => {
@@ -41,12 +41,8 @@ describe('a conversation', () => {
     expect(eventsOf(first, 'tool-result')[0].result.notes[0]).toMatchObject({ title: 'Groceries' });
     expect(eventsOf(first, 'done')[0]).toMatchObject({
       status: 'completed',
-      usage: {
-        inputTokens: 200,
-        outputTokens: 40,
-        agent: { inputTokens: 200, outputTokens: 40 },
-        guardrail: { inputTokens: 0, outputTokens: 0 },
-      },
+      reason: null,
+      usage: runUsage(tokens(200, 40)),
     });
 
     await user.say(thread.id, 'What does it say?');
@@ -61,7 +57,7 @@ describe('a conversation', () => {
     const thread = await user.createThread();
     await user.say(thread.id, 'Hi');
     const request = stack.anthropic.requests.at(-1);
-    expect(request).toMatchObject({ model: 'claude-sonnet-5-5', max_tokens: 4096 });
+    expect(request).toMatchObject({ model: 'claude-sonnet-5-5', max_tokens: 16_000 });
     expect(request).not.toHaveProperty('temperature');
     expect(request).not.toHaveProperty('top_p');
     expect(request).not.toHaveProperty('top_k');
@@ -117,12 +113,7 @@ describe('a conversation', () => {
       expect(JSON.stringify(saved.messages)).toContain('No notes yet.');
     }, untilSaved);
 
-    const usage = {
-      inputTokens: 200,
-      outputTokens: 40,
-      agent: { inputTokens: 200, outputTokens: 40 },
-      guardrail: { inputTokens: 0, outputTokens: 0 },
-    };
+    const usage = runUsage(tokens(200, 40));
     expect(eventsOf(await readSse(response), 'done')[0].usage).toEqual(usage);
     expect(await (await user.request('/v1/usage')).json()).toMatchObject(usage);
   });

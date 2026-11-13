@@ -8,15 +8,50 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
 - [docs/notes-api.md](docs/notes-api.md) documents the contract the agent needs from the notes API: endpoints, fields, auth, errors, and timeouts.
+- Each run reserves `AGENT_RUN_TOKEN_LIMIT` tokens, 100,000 by default, of its user's daily budget before it streams, and stops before a step that could pass it. The limit caps the whole run, across its approvals, and the run row records `spent_tokens`. See [decision 008](docs/decisions/008-reserve-run-tokens-before-streaming.md).
+- `AGENT_MAX_CONCURRENT_RUNS`, 3 by default, caps the runs one user streams at once. More return `429 too-many-runs` with `Retry-After`.
+- `Idempotency-Key` on `POST /v1/threads/{id}/messages`: a retry within 24 hours returns `409 duplicate-request` with the `runId` the first request started and its `runStatus`, and the key with a different request returns `422 idempotency-key-reused`. A run that fails before the agent calls a tool frees its key, so a retry with it runs. See [Retry safely](docs/api.md#retry-safely).
+- Prompt caching: a cache breakpoint after the tools and instructions, and Anthropic's automatic breakpoint at the end of each request. Usage adds `cacheReadInputTokens` and `cacheWriteInputTokens`, and `GET /v1/usage` adds `reserved`.
+- `GUARDRAIL_ON_ERROR`, `block` by default. See Changed.
+- An OpenAPI 3.1 document generated from the routes, committed as `openapi.json`, with shared problem responses and documented headers. `/openapi.json` and a self-hosted, pinned Swagger UI at `/docs` are served when `DOCS_ENABLED=true`, under a strict CSP. `pnpm openapi:generate` regenerates the file.
+- OpenTelemetry metrics over OTLP, alongside traces: `gen_ai.client.token.usage`, `agent.run.duration`, HTTP server metrics, and the pool's. Requests get spans, and Mastra's run spans join the request's trace.
+- Log lines written during a traced request carry `trace_id` and `span_id`, and calls to the notes API send `traceparent`.
+- `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, `false` by default, decides whether spans hold messages, replies, and tool data.
+- `THREAD_RETENTION_DAYS`, 90 by default: the hourly cleanup deletes threads nobody used for that long, with their messages. `0` keeps them.
+- `SHUTDOWN_DRAIN_SECONDS`, 5 by default, and `SHUTDOWN_TIMEOUT_SECONDS`, 30 by default. See Changed.
+- [docs/deploy.md](docs/deploy.md), a go-live checklist: TLS, Postgres TLS, pool sizing, migrations, secrets, draining, docs, the guardrail, and telemetry.
+- The release pushes the multi-platform image by digest, scans each platform of that exact image with Trivy, and only then tags it, so the tags point at what was scanned. It carries an SBOM, `mode=max` provenance, and a build provenance attestation. CI builds and scans both platforms on every pull request.
 
 ### Changed
 
+- **Breaking:** a reply cut off at the output cap ends as `incomplete` with reason `max_tokens`, or `context_window`, a refusal as `refused`, and a run that uses up its steps or tokens as `incomplete` with `max_steps` or `token_limit`, instead of `completed`. The `done` event adds `reason`, and the run row saves the status and a `stop_reason`. See [decision 010](docs/decisions/010-report-why-a-run-stopped.md).
+- **Breaking:** the prompt injection check fails closed. When its model call fails, the run ends as `failed` with reason `guardrail_unavailable` and a `503` problem, instead of letting the message through. `GUARDRAIL_ON_ERROR=allow` restores the old behavior, and both log a `guardrail.failed` warning. See [decision 009](docs/decisions/009-fail-closed-when-the-guardrail-fails.md).
+- **Breaking:** the `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers are replaced by `RateLimit` and `RateLimit-Policy` from draft-ietf-httpapi-ratelimit-headers. On a 429, `RateLimit` and `Retry-After` describe the policy that was exceeded.
+- **Breaking:** `DOCS_ENABLED` defaults to `false`, so `/docs` and `/openapi.json` return 404 unless it's on. `.env.example` and Compose turn it on. See [decision 011](docs/decisions/011-turn-api-docs-off-by-default.md).
+- **Breaking:** `budget-exceeded` now means less than `AGENT_RUN_TOKEN_LIMIT` tokens are left, counting what the user's streaming runs hold. When their runs hold the tokens, `Retry-After` is 5 seconds instead of the time to midnight. Approving or declining a tool call reserves what's left of the run's limit. If the budget can't cover it, the run ends as `failed` with reason `budget_exceeded`, in the stream, and the thread takes messages again, so a decline is never blocked.
+- `AGENT_MAX_OUTPUT_TOKENS` defaults to 16,000, up from 4,096, so adaptive thinking fits.
+- The per-IP rate limit counts an IPv4 address whole, an IPv4-mapped IPv6 address as its IPv4 address, and other IPv6 addresses by their /64.
+- On `SIGTERM`, the server fails `/readyz` for `SHUTDOWN_DRAIN_SECONDS`, lets runs finish for up to `SHUTDOWN_TIMEOUT_SECONDS`, then aborts the rest with reason `shutdown` and frees their tokens. It used to abort every run at once. Compose's `stop_grace_period` is 50 seconds.
+- Migrations take a Postgres advisory lock, so concurrent runners apply them once, and DDL gives up after a 5-second `lock_timeout`.
+- Compose builds the image once and runs `migrate` and `agent` from it, on a read-only filesystem.
+- The image's base is pinned by digest, without npm or npx, and its health check uses `wget`. Renovate pins Docker digests and waits 3 days before taking a new release.
+- The SBOM workflow job reads the repo with `contents: read`.
+- Health checks log at `debug` and aren't traced.
 - Usage in the `done` event and `GET /v1/usage` adds `agent` and `guardrail` objects, each with `inputTokens` and `outputTokens`. The top-level totals now include the guardrail's tokens.
 - Any API that meets the notes API contract works. Compose and the end-to-end tests run api-hono-starter as an optional example backend, now at 0.4.0.
 - Compose and the end-to-end tests run the hardened api-hono-starter 0.5.0 on a read-only filesystem. The notes client already relied only on `Retry-After` and the problem `detail`, so its rate-limit headers and error changes need nothing else.
 
+### Security
+
+- Every `/v1` response is `Cache-Control: no-store`, and every response but `/docs` has `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
+- The `Bearer` scheme matches case-insensitively, with any number of spaces before the token.
+- A failed guardrail call no longer reaches the console with the user's message in its error.
+
 ### Fixed
 
+- The quick start no longer crashes at startup: an empty variable, such as Compose's `OTEL_EXPORTER_OTLP_ENDPOINT=""` or `KEY=` in `.env`, counts as unset. Compose leaves unset host variables unset, and a test boots the app with `.env.example`.
+- Parallel messages can no longer spend past the daily budget. Before, each checked the budget, then all of them ran.
+- The `approval-pending` problem names the run by its public `run_...` ID, not its internal UUID.
 - The prompt injection guardrail's tokens count toward the daily budget and the run's usage. Before, only the agent's calls counted. A message the guardrail blocks still records the check's tokens. The migration adds two `token_usage` columns with defaults, so it doesn't rewrite the table.
 - A run's token usage, in its `done` event and in the daily budget, no longer sometimes counts the run's total again for its last model call. That happened when the client read the stream more slowly than the model answered.
 

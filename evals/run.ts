@@ -27,6 +27,7 @@ type EvalConfig = Pick<
   | 'AGENT_MEMORY_MESSAGES'
   | 'AGENT_MAX_STEPS'
   | 'AGENT_MAX_OUTPUT_TOKENS'
+  | 'GUARDRAIL_ON_ERROR'
 >;
 
 interface RunOptions {
@@ -56,6 +57,7 @@ export async function runCases({
     model: config.AGENT_MODEL,
     guardrailModel: config.GUARDRAIL_MODEL,
     memoryMessages: config.AGENT_MEMORY_MESSAGES,
+    guardrailOnError: config.GUARDRAIL_ON_ERROR,
   });
   const limits = {
     maxSteps: config.AGENT_MAX_STEPS,
@@ -95,6 +97,7 @@ export async function runCases({
       context: { userId, notes },
       threadId: `thr_eval_${key}`,
       limits,
+      tracing: { recordContent: false },
     });
 
     beforeCase?.(testCase);

@@ -12,12 +12,12 @@ The sample agent is a notes assistant. It reads and edits a user's notes through
 - **Claude by default:** Sonnet 5.5 runs the agent and Haiku 5.5 checks input. Any [Mastra model](https://mastra.ai/models) works through one variable.
 - **Acts as the user:** callers send your app's own token, and every tool call uses it. The agent can never do more than the user can.
 - **Human approval:** updates and deletes pause until the user approves. Approvals survive restarts.
-- **Streaming API:** server-sent events for text, tool calls, approvals, and usage, with Problem Details errors.
+- **Streaming API:** server-sent events for text, tool calls, approvals, usage, and why a run stopped, with Problem Details errors, an OpenAPI 3.1 document, and `Idempotency-Key` retries.
 - **Memory:** threads and messages in Postgres, scoped to each user.
-- **Guardrails:** a prompt injection check, control character stripping, and size limits.
-- **Cost control:** per-user daily token budgets, rate limits, step limits, output limits, and run timeouts.
+- **Guardrails:** a prompt injection check that fails closed, control character stripping, and size limits.
+- **Cost control:** per-user daily token budgets that reserve each run's tokens up front, prompt caching, concurrency and rate limits, and step, output, token, and time limits per run.
 - **Evals:** deterministic eval tests in CI, plus live evals against the real model with one command.
-- **Ready to operate:** a non-root Docker image, health checks, JSON logs, and OpenTelemetry traces.
+- **Ready to operate:** a non-root, digest-pinned Docker image with an SBOM and provenance, graceful draining, health checks, JSON logs, and OpenTelemetry traces and metrics.
 - **Agent-ready:** `AGENTS.md`, skills, and checks that run on every commit.
 - **Strict gates:** strict types, lint, 90% coverage, and end-to-end tests against the real Docker stack.
 
@@ -48,7 +48,7 @@ curl -N -X POST localhost:3000/v1/threads/$THREAD/messages -H "Authorization: Be
   -H 'Content-Type: application/json' -d '{"content":"What notes do I have?"}'
 ```
 
-Ask it to delete a note, and the stream sends an `approval-required` event, then ends with `done` and status `awaiting_approval`. [docs/api.md](docs/api.md) shows how to approve it.
+Ask it to delete a note, and the stream sends an `approval-required` event, then ends with `done` and status `awaiting_approval`. [docs/api.md](docs/api.md) shows how to approve it. The API docs are at <http://localhost:3000/docs>.
 
 If a port is taken, set `PORT`, `NOTES_API_PORT`, or `POSTGRES_PORT` before running Compose.
 
@@ -80,6 +80,7 @@ pnpm dev
 | Run the end-to-end tests against the Docker stack | `pnpm test:e2e` |
 | Run the live evals against Claude | `pnpm eval` |
 | Create a migration | `pnpm db:generate` |
+| Regenerate `openapi.json` after an endpoint changes | `pnpm openapi:generate` |
 
 Tests never call a real model. They use a fake Anthropic API, so they're free and deterministic.
 
@@ -92,17 +93,19 @@ Tests never call a real model. They use a fake Anthropic API, so they're free an
 - [Evals](docs/evals.md): test the agent's behavior
 - [Errors](docs/errors.md): every problem type the API returns
 - [Operations](docs/operations.md): configuration, deploys, costs, and tracing
+- [Go live](docs/deploy.md): the production checklist: TLS, secrets, migrations, draining, and docs
 
 ## Project structure
 
 | Path | Purpose |
 |---|---|
 | `src/agent/` | The agent, its tools, runs, budgets, and Mastra wiring |
-| `src/http/` | Routes, auth, and rate limits |
-| `src/platform/` | Problem Details errors and the logger |
+| `src/http/` | Routes, auth, rate limits, idempotency, and the OpenAPI document |
+| `src/platform/` | Problem Details errors, the logger, metrics, shutdown, and cleanup |
 | `src/notes/` | The client for the API the agent acts on |
 | `src/db/` | Schema, connections, and the migration runner |
 | `migrations/` | Generated SQL migrations, which are append-only |
+| `openapi.json` | The API's OpenAPI 3.1 document, generated from the routes |
 | `evals/` | Eval cases and the runner |
 | `test/` | Unit, integration, and end-to-end tests, plus fakes for the model and the notes API, so tests need no other service |
 | `docs/` | [API](docs/api.md), [architecture](docs/architecture.md), guides, and [decisions](docs/decisions/) |

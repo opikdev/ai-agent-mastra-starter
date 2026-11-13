@@ -8,36 +8,17 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm verify
-
-  e2e:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:e2e
+  checks:
+    uses: ./.github/workflows/ci.yml
 
   image:
-    needs: [check, e2e]
+    needs: checks
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -52,9 +33,52 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: type=semver,pattern={{version}}
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      # Pushed untagged, so nothing can pull it by tag until every platform passes the scan.
+      - id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          sbom: true
+          provenance: mode=max
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Scan linux/amd64
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ghcr.io/${{ github.repository }}@${{ steps.push.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan linux/arm64
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ghcr.io/${{ github.repository }}@${{ steps.push.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Tag the scanned image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          for tag in $TAGS; do
+            docker buildx imagetools create --tag "$tag" "$IMAGE@$DIGEST"
+            tagged=$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            if [[ $tagged != "$DIGEST" ]]; then
+              echo "$tag points at $tagged, not the scanned $DIGEST" >&2
+              exit 1
+            fi
+          done

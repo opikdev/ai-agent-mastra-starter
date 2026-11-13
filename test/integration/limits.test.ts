@@ -14,6 +14,7 @@ describe('auth', () => {
     ['no header', {}],
     ['another scheme', { Authorization: 'Basic abc' }],
     ['an extra part', { Authorization: 'Bearer a b' }],
+    ['no token', { Authorization: 'Bearer ' }],
     ['a token the notes API rejects', { Authorization: 'Bearer nope' }],
     ['a very long token', { Authorization: `Bearer ${'x'.repeat(513)}` }],
   ])('rejects %s with 401', async (_label, headers) => {
@@ -23,6 +24,14 @@ describe('auth', () => {
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toBe('Bearer');
     expect((await json(response)).type).toBe('urn:problem:unauthorized');
+  });
+
+  it.each(['bearer', 'BEARER', 'Bearer  '])('accepts the scheme written as %j', async (scheme) => {
+    const user = stack.signUp();
+    const response = await stack.app.request('/v1/threads', {
+      headers: { Authorization: `${scheme} ${user.token}`, 'X-Forwarded-For': uniqueIp() },
+    });
+    expect(response.status).toBe(200);
   });
 
   it('returns 503 when the notes API can’t confirm the token', async () => {
@@ -56,56 +65,48 @@ describe('auth', () => {
   });
 });
 
-describe('budgets and rate limits', () => {
+describe('rate limits', () => {
   let stack: TestStack;
   beforeAll(async () => {
-    stack = await startStack({ DAILY_TOKEN_BUDGET: '200', AGENT_RATE_LIMIT_PER_MINUTE: '3' });
+    stack = await startStack({ AGENT_RATE_LIMIT_PER_MINUTE: '3' });
   });
   afterAll(() => stack.close());
 
-  it('refuses new runs once the day’s budget is spent', async () => {
+  it('limits agent requests per user per minute, with draft RateLimit headers', async () => {
     const user = stack.signUp();
-    const thread = await user.createThread();
-    await user.say(thread.id, 'one');
-    await user.say(thread.id, 'two');
-    const response = await user.request(`/v1/threads/${thread.id}/messages`, {
-      method: 'POST',
-      json: { content: 'three' },
-    });
-    expect(response.status).toBe(429);
-    expect((await json(response)).type).toBe('urn:problem:budget-exceeded');
-    expect(Number(response.headers.get('retry-after'))).toBeGreaterThan(0);
-    expect(await (await user.request('/v1/usage')).json()).toEqual({
-      inputTokens: 200,
-      outputTokens: 40,
-      agent: { inputTokens: 200, outputTokens: 40 },
-      guardrail: { inputTokens: 0, outputTokens: 0 },
-      dailyBudget: 200,
-      remaining: 0,
-    });
-  });
-
-  it('keeps budgets per user', async () => {
-    const user = stack.signUp();
-    const thread = await user.createThread();
-    expect(eventsOf(await user.say(thread.id, 'hi'), 'done')[0].status).toBe('completed');
-  });
-
-  it('limits agent requests per user per minute', async () => {
-    const user = stack.signUp();
-    const statuses: number[] = [];
+    const responses = [];
     for (let i = 0; i < 4; i += 1) {
-      const response = await user.request(
-        '/v1/threads/thr_00000000000000000000000000000000/messages',
-        {
+      responses.push(
+        await user.request('/v1/threads/thr_00000000000000000000000000000000/messages', {
           method: 'POST',
           json: { content: 'hi' },
-        },
+        }),
       );
-      statuses.push(response.status);
-      if (i === 3) expect(response.headers.get('retry-after')).toBeTruthy();
     }
-    expect(statuses).toEqual([404, 404, 404, 429]);
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 429]);
+    const [first, , , limited] = responses;
+    expect(first?.headers.get('ratelimit-policy')).toBe('"global";q=300;w=60, "agent";q=3;w=60');
+    expect(first?.headers.get('ratelimit')).toMatch(/^"global";r=\d+;t=\d+, "agent";r=2;t=\d+$/);
+    expect(limited?.headers.get('ratelimit')).toMatch(/^"agent";r=0;t=(\d+)$/);
+    const reset = limited?.headers.get('ratelimit')?.split('t=')[1];
+    expect(limited?.headers.get('retry-after')).toBe(reset);
+    expect(first?.headers.has('ratelimit-limit')).toBe(false);
+  });
+
+  it('counts IPv6 clients by their /64', async () => {
+    const statuses: number[] = [];
+    const limited = await startStack({ RATE_LIMIT_PER_MINUTE: '2' });
+    try {
+      for (const suffix of ['1', '2', '3']) {
+        const response = await limited.app.request('/v1/threads', {
+          headers: { 'X-Forwarded-For': `2001:db8:aaaa:bbbb::${suffix}` },
+        });
+        statuses.push(response.status);
+      }
+    } finally {
+      await limited.close();
+    }
+    expect(statuses).toEqual([401, 401, 429]);
   });
 });
 
@@ -160,7 +161,7 @@ describe('timeouts', () => {
     const events = await user.say(thread.id, 'hi');
     stack.anthropic.delayMs = 0;
     expect(eventsOf(events, 'error')[0].detail).toContain('0.3 seconds');
-    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    expect(eventsOf(events, 'done')[0]).toMatchObject({ status: 'aborted', reason: 'timeout' });
   });
 });
 
@@ -209,8 +210,14 @@ describe('shutdown', () => {
       type: 'urn:problem:service-unavailable',
       detail: 'The server shut down during this run. Send your message again.',
     });
-    expect(eventsOf(events, 'done')[0].status).toBe('aborted');
+    expect(eventsOf(events, 'done')[0]).toMatchObject({ status: 'aborted', reason: 'shutdown' });
     const rows = await stack.db.select().from(runs).where(eq(runs.threadId, thread.id));
-    expect(rows.map((row) => row.status)).toEqual(['failed']);
+    expect(
+      rows.map(({ status, stopReason, reservedTokens }) => ({
+        status,
+        stopReason,
+        reservedTokens,
+      })),
+    ).toEqual([{ status: 'failed', stopReason: 'shutdown', reservedTokens: 0 }]);
   });
 });

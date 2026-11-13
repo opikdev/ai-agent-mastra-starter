@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromPublicId, newThreadId, toPublicId } from '../../src/http/ids.ts';
+import { fromPublicId, newThreadId, toPublicId } from '../../src/platform/public-id.ts';
 
 describe('public IDs', () => {
   it('round-trips a UUID', () => {

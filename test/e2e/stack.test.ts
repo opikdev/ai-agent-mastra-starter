@@ -1,5 +1,6 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
+import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type FakeAnthropic, startFakeAnthropic } from '../fake-anthropic.ts';
 import { readSse } from '../helpers.ts';
@@ -18,6 +19,8 @@ const composeEnv = {
   ANTHROPIC_API_KEY: 'e2e-key',
   ANTHROPIC_BASE_URL: `http://host.docker.internal:${anthropicPort}/v1`,
   OTEL_EXPORTER_OTLP_ENDPOINT: `http://host.docker.internal:${otlpPort}`,
+  SHUTDOWN_DRAIN_SECONDS: '1',
+  SHUTDOWN_TIMEOUT_SECONDS: '5',
   COMPOSE_PROJECT_NAME: 'ai-agent-mastra-starter-e2e',
 };
 
@@ -27,6 +30,13 @@ function compose(...args: string[]): string {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+const run = promisify(execFile);
+
+/** Doesn't block, so the fake model in this process keeps answering during a restart. */
+async function composeAsync(...args: string[]) {
+  await run('docker', ['compose', ...args], { env: composeEnv });
 }
 
 async function waitFor(check: () => Promise<boolean> | boolean, timeoutMs = 30_000) {
@@ -89,6 +99,24 @@ describe('the running stack', () => {
     expect((await fetch(`${agentUrl}/readyz`)).status).toBe(200);
     expect(JSON.parse(compose('ps', 'agent', '--format', 'json').trim()).Health).toBe('healthy');
     expect(compose('exec', '-T', 'agent', 'id', '-u').trim()).not.toBe('0');
+  });
+
+  it('passes no empty variables when the host leaves them unset', () => {
+    const { OTEL_EXPORTER_OTLP_ENDPOINT: _, ANTHROPIC_BASE_URL: __, ...bare } = composeEnv;
+    const config = JSON.parse(
+      execFileSync('docker', ['compose', 'config', '--format', 'json'], {
+        env: bare,
+        encoding: 'utf8',
+      }),
+    );
+    const environment = config.services.agent.environment as Record<string, string | null>;
+    expect(Object.entries(environment).filter(([, value]) => value === '')).toEqual([]);
+    expect(environment.OTEL_EXPORTER_OTLP_ENDPOINT).toBeNull();
+  });
+
+  it('serves the API docs', async () => {
+    expect((await fetch(`${agentUrl}/docs`)).status).toBe(200);
+    expect((await fetch(`${agentUrl}/openapi.json`)).status).toBe(200);
   });
 
   it('rejects a token the example notes API doesn’t know', async () => {
@@ -158,31 +186,42 @@ describe('the running stack', () => {
     expect(gone.status).toBe(404);
   });
 
-  it('ends a run as aborted when the agent restarts mid-answer, and frees the thread', async () => {
-    const thread = (await (await agent('/v1/threads', { method: 'POST', body: '{}' })).json()) as {
-      id: string;
-    };
-    const send = (content: string) =>
-      agent(`/v1/threads/${thread.id}/messages`, {
+  it('lets a run finish during a restart, and aborts one that outlasts the timeout', async () => {
+    const newThread = async () =>
+      (
+        (await (await agent('/v1/threads', { method: 'POST', body: '{}' })).json()) as {
+          id: string;
+        }
+      ).id;
+    const [quick, slow] = [await newThread(), await newThread()];
+    const send = (threadId: string, content: string) =>
+      agent(`/v1/threads/${threadId}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content }),
       }).then(readSse);
     const before = anthropic.requests.length;
-    anthropic.delayMs = 20_000;
-    const interrupted = send('Write me a long story');
+    anthropic.delayMs = 2_000;
+    const quickReply = send(quick, 'Say hi');
     await waitFor(() => anthropic.requests.length > before);
+    anthropic.delayMs = 20_000;
+    const slowReply = send(slow, 'Write me a long story');
+    await waitFor(() => anthropic.requests.length > before + 1);
 
-    compose('restart', 'agent');
-    const events = await interrupted;
+    const restarted = composeAsync('restart', 'agent');
+    const [quickEvents, slowEvents] = await Promise.all([quickReply, slowReply]);
+    await restarted;
     anthropic.delayMs = 0;
-    expect(events.find((event) => event.event === 'error')?.data.detail).toContain('shut down');
-    expect(events.at(-1)?.data).toMatchObject({ status: 'aborted' });
+    expect(quickEvents.at(-1)?.data).toMatchObject({ status: 'completed' });
+    expect(slowEvents.find((event) => event.event === 'error')?.data.detail).toContain('shut down');
+    expect(slowEvents.at(-1)?.data).toMatchObject({ status: 'aborted', reason: 'shutdown' });
 
     await waitFor(
       async () => (await fetch(`${agentUrl}/readyz`).catch(() => null))?.status === 200,
     );
     anthropic.replies.push({ text: 'Back again.' });
-    expect((await send('Are you there?')).at(-1)?.data).toMatchObject({ status: 'completed' });
+    expect((await send(slow, 'Are you there?')).at(-1)?.data).toMatchObject({
+      status: 'completed',
+    });
   });
 
   it('checks messages with the guardrail model', () => {

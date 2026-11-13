@@ -11,6 +11,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 | [docs/evals.md](docs/evals.md) | How to add and run evals |
 | [docs/errors.md](docs/errors.md) | Every problem type the API can return |
 | [docs/operations.md](docs/operations.md) | Configuration, deploys, costs, and tracing |
+| [docs/deploy.md](docs/deploy.md) | The go-live checklist: TLS, secrets, migrations, draining, and docs |
 | [docs/decisions/](docs/decisions/) | Why it's built this way |
 | `.agents/skills/` | Step-by-step guides for recurring tasks |
 | `.mcp.json` | MCP servers for this project |
@@ -25,6 +26,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 | Test against the real Docker images | `pnpm test:e2e` |
 | Run the live evals | `pnpm eval` |
 | Create a migration | `pnpm db:generate` |
+| Regenerate the API contract | `pnpm openapi:generate` |
 
 ## Rules
 
@@ -41,6 +43,7 @@ A production-ready AI agent API in TypeScript: Mastra, Claude, Hono, Drizzle, an
 - Tools call outside systems with the caller's own credentials from the request context. Never give a tool a shared admin credential.
 - Tools return `{ error }` for failures the model can act on, and throw for bugs.
 - Throw `ProblemError` for every HTTP failure, and add new types to `src/platform/problem.ts` and `docs/errors.md`.
+- Define routes with `createRoute()`. When an endpoint changes, run `pnpm openapi:generate` and commit `openapi.json` in the same change. A test fails on drift.
 - Keep imports pointing one way: `http` to `agent` to `notes`, `db`, and `platform`. Only `src/http/` uses Hono. `test/unit/architecture.test.ts` enforces it.
 - Never log prompts, messages, tool arguments or results, or tokens. Log errors as `err`, which `src/platform/logger.ts` reduces to what failed.
 - Scope every thread and run to the caller's user ID. Return 404, not 403, for someone else's.

@@ -15,6 +15,7 @@ type AgentConfig = Pick<
   Config,
   | 'AGENT_MODEL'
   | 'GUARDRAIL_MODEL'
+  | 'GUARDRAIL_ON_ERROR'
   | 'AGENT_MEMORY_MESSAGES'
   | 'LOG_LEVEL'
   | 'OTEL_EXPORTER_OTLP_ENDPOINT'
@@ -54,6 +55,7 @@ export function createMastra(config: AgentConfig, pool: pg.Pool) {
         model: config.AGENT_MODEL,
         guardrailModel: config.GUARDRAIL_MODEL,
         memoryMessages: config.AGENT_MEMORY_MESSAGES,
+        guardrailOnError: config.GUARDRAIL_ON_ERROR,
       }),
     },
     storage: createStore(pool),

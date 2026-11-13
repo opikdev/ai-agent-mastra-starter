@@ -1,0 +1,1187 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ai-agent-mastra-starter",
+    "version": "0.2.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "headers": {
+      "X-Request-Id": {
+        "description": "Identifies the request. Quote it when you report a problem.",
+        "schema": {
+          "type": "string",
+          "example": "0b5f7c1e-6a0f-4b8e-9d3c-2f1a7e4b9c10"
+        }
+      },
+      "Cache-Control": {
+        "description": "`no-store` on every `/v1` response.",
+        "schema": {
+          "type": "string",
+          "example": "no-store"
+        }
+      },
+      "RateLimit": {
+        "description": "Sent on every `/v1` response. The quota left in each policy, `r`, and the seconds until it resets, `t`, per draft-ietf-httpapi-ratelimit-headers. On a 429, only the policy that was exceeded.",
+        "schema": {
+          "type": "string",
+          "example": "\"global\";r=298;t=25"
+        }
+      },
+      "RateLimit-Policy": {
+        "description": "Sent on every `/v1` response. Each policy that applies, with its quota, `q`, and window in seconds, `w`.",
+        "schema": {
+          "type": "string",
+          "example": "\"global\";q=300;w=60, \"agent\";q=20;w=60"
+        }
+      },
+      "Retry-After": {
+        "description": "Seconds to wait before retrying.",
+        "schema": {
+          "type": "integer",
+          "example": 25
+        }
+      },
+      "Location": {
+        "description": "The URL of the created resource.",
+        "schema": {
+          "type": "string",
+          "example": "/v1/threads/thr_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+        }
+      },
+      "WWW-Authenticate": {
+        "description": "The scheme to authenticate with.",
+        "schema": {
+          "type": "string",
+          "example": "Bearer"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Problem Details with `type` `urn:problem:validation-failed`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Problem Details with `type` `urn:problem:unauthorized`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          },
+          "WWW-Authenticate": {
+            "$ref": "#/components/headers/WWW-Authenticate"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Problem Details with `type` `urn:problem:not-found`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Problem Details with `type` `urn:problem:thread-busy` or `urn:problem:approval-pending` or `urn:problem:approval-not-pending` or `urn:problem:duplicate-request`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ContentTooLarge": {
+        "description": "Problem Details with `type` `urn:problem:payload-too-large`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "Problem Details with `type` `urn:problem:unsupported-media-type`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "UnprocessableContent": {
+        "description": "Problem Details with `type` `urn:problem:idempotency-key-reused`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Problem Details with `type` `urn:problem:rate-limited` or `urn:problem:budget-exceeded` or `urn:problem:too-many-runs`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/Retry-After"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Problem Details with `type` `urn:problem:internal-error`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Problem Details with `type` `urn:problem:service-unavailable`",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/Cache-Control"
+          },
+          "RateLimit": {
+            "$ref": "#/components/headers/RateLimit"
+          },
+          "RateLimit-Policy": {
+            "$ref": "#/components/headers/RateLimit-Policy"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/Retry-After"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "urn:problem:not-found"
+          },
+          "title": {
+            "type": "string",
+            "example": "Resource not found"
+          },
+          "status": {
+            "type": "integer",
+            "example": 404
+          },
+          "detail": {
+            "type": "string",
+            "example": "Thread thr_0190 does not exist."
+          },
+          "instance": {
+            "type": "string",
+            "example": "/v1/threads/thr_0190"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": ["field", "detail"]
+            },
+            "description": "Present when `type` is urn:problem:validation-failed"
+          },
+          "runId": {
+            "type": "string",
+            "description": "Present when `type` is urn:problem:duplicate-request"
+          },
+          "runStatus": {
+            "type": "string",
+            "description": "The status of the run `runId` names, when `type` is urn:problem:duplicate-request. `failed` means it may have run a tool, so send the message again with a new key"
+          }
+        },
+        "required": ["type", "title", "status", "detail", "instance"]
+      },
+      "HealthStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"]
+          }
+        },
+        "required": ["status"]
+      },
+      "Thread": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "thr_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+          },
+          "title": {
+            "type": ["string", "null"],
+            "example": "Weekly plan"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "title", "createdAt", "updatedAt"]
+      },
+      "CreateThread": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "ThreadList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Thread"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "nextCursor": {
+                "type": ["string", "null"]
+              }
+            },
+            "required": ["limit", "nextCursor"]
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "ThreadWithMessages": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Thread"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "messages": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            },
+            "required": ["messages"]
+          }
+        ]
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["user", "assistant", "system", "signal"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "args": {},
+                "result": {}
+              },
+              "required": ["toolCallId", "toolName"]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "role", "text", "toolCalls", "createdAt"]
+      },
+      "SendMessage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          }
+        },
+        "required": ["content"],
+        "additionalProperties": false
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "toolCallId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": ["toolCallId", "approved"],
+        "additionalProperties": false
+      },
+      "DailyUsage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Usage"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "dailyBudget": {
+                "type": "integer"
+              },
+              "reserved": {
+                "type": "integer",
+                "description": "Tokens held by runs still streaming"
+              },
+              "remaining": {
+                "type": "integer"
+              }
+            },
+            "required": ["dailyBudget", "reserved", "remaining"]
+          }
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "cacheReadInputTokens": {
+            "type": "integer"
+          },
+          "cacheWriteInputTokens": {
+            "type": "integer"
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "inputTokens": {
+                "type": "integer"
+              },
+              "outputTokens": {
+                "type": "integer"
+              },
+              "cacheReadInputTokens": {
+                "type": "integer"
+              },
+              "cacheWriteInputTokens": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadInputTokens",
+              "cacheWriteInputTokens"
+            ]
+          },
+          "guardrail": {
+            "type": "object",
+            "properties": {
+              "inputTokens": {
+                "type": "integer"
+              },
+              "outputTokens": {
+                "type": "integer"
+              },
+              "cacheReadInputTokens": {
+                "type": "integer"
+              },
+              "cacheWriteInputTokens": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadInputTokens",
+              "cacheWriteInputTokens"
+            ]
+          }
+        },
+        "required": [
+          "inputTokens",
+          "outputTokens",
+          "cacheReadInputTokens",
+          "cacheWriteInputTokens",
+          "agent",
+          "guardrail"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getLiveness",
+        "summary": "Check that the process is running",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "The process is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "getReadiness",
+        "summary": "Check that the agent can reach Postgres and is not shutting down",
+        "tags": ["Health"],
+        "responses": {
+          "200": {
+            "description": "Ready for traffic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/threads": {
+      "post": {
+        "operationId": "createThread",
+        "summary": "Start a thread",
+        "tags": ["Threads"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThread"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thread created",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listThreads",
+        "summary": "List your threads, most recently updated first",
+        "tags": ["Threads"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,5}$",
+              "description": "`meta.nextCursor` from a previous page."
+            },
+            "required": false,
+            "description": "`meta.nextCursor` from a previous page.",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadList"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}": {
+      "get": {
+        "operationId": "getThread",
+        "summary": "Get a thread and its latest 100 messages",
+        "tags": ["Threads"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "thr_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadWithMessages"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteThread",
+        "summary": "Delete a thread and its messages",
+        "tags": ["Threads"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "thr_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/threads/{id}/messages": {
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Send a message and stream the reply",
+        "tags": ["Runs"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "thr_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started and its status, instead of sending the message twice. A run that fails before the agent calls a tool frees its key, so a retry with it runs again."
+            },
+            "required": false,
+            "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started and its status, instead of sending the message twice. A run that fails before the agent calls a tool frees its key, so a retry with it runs again.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent events: `run`, then `text`, `tool-call`, `tool-result`, `tool-error`, `approval-required`, `blocked`, or `error`, then `done`. See docs/api.md.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "event-stream"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableContent"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/runs/{id}/approval": {
+      "post": {
+        "operationId": "decideApproval",
+        "summary": "Approve or decline a paused tool call and stream the rest of the run",
+        "tags": ["Runs"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "run_0190a7e4c1f07c3e8d21b6f4a9e05d13"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent events: `run`, then `text`, `tool-call`, `tool-result`, `tool-error`, `approval-required`, `blocked`, or `error`, then `done`. See docs/api.md.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "event-stream"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "operationId": "getUsage",
+        "summary": "Show today's tokens and budget",
+        "tags": ["Usage"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Today's usage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyUsage"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/Cache-Control"
+              },
+              "RateLimit": {
+                "$ref": "#/components/headers/RateLimit"
+              },
+              "RateLimit-Policy": {
+                "$ref": "#/components/headers/RateLimit-Policy"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

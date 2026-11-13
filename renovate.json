@@ -1,4 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"]
+  "extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"],
+  "minimumReleaseAge": "3 days",
+  "packageRules": [{ "matchDatasources": ["docker"], "pinDigests": true }]
 }
