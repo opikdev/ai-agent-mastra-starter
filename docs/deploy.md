@@ -38,6 +38,11 @@ Run the migrations as one job before the new version takes traffic:
 
 The runner holds a Postgres advisory lock for the whole run, so running it in every replica is also safe: the others wait, then find nothing to apply. Each statement gives up after 5 seconds waiting for a table lock, instead of stalling traffic behind it, so retry the job if a long query was in the way.
 
+Drizzle applies all pending migrations in one transaction, so every lock a statement takes is held until the last one commits. On small tables that's a moment. On a large table, a new `CHECK` or foreign key scans every row, and `CREATE INDEX` blocks writes, for that whole time. For those, split the change across releases instead:
+
+- Add the constraint with `NOT VALID` in one release, and `VALIDATE CONSTRAINT` in a migration of the next one.
+- Run `CREATE INDEX CONCURRENTLY` by hand before the deploy, since it can't run inside a transaction, and write the migration's index as `CREATE INDEX IF NOT EXISTS`.
+
 ## Keep secrets out of images
 
 - Read `DATABASE_URL`, `MIGRATION_DATABASE_URL`, and `ANTHROPIC_API_KEY` from your platform's secret store, such as Kubernetes Secrets or AWS Secrets Manager. Never bake them into an image or commit them.

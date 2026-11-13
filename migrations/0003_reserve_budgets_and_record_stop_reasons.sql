@@ -21,7 +21,5 @@ ALTER TABLE "token_usage" ADD COLUMN "guardrail_cache_write_input_tokens" bigint
 CREATE UNIQUE INDEX "uq_idempotency_keys_user_endpoint_key" ON "idempotency_keys" USING btree ("user_id","endpoint","key");--> statement-breakpoint
 CREATE INDEX "idx_idempotency_keys_expires_at" ON "idempotency_keys" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "idx_runs_running_user" ON "runs" USING btree ("user_id") WHERE status = 'running';--> statement-breakpoint
-ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_reserved_tokens" CHECK ("runs"."reserved_tokens" >= 0) NOT VALID;--> statement-breakpoint
-ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_status" CHECK (status in ('running', 'awaiting_approval', 'completed', 'incomplete', 'refused', 'blocked', 'failed')) NOT VALID;--> statement-breakpoint
-ALTER TABLE "runs" VALIDATE CONSTRAINT "chk_runs_reserved_tokens";--> statement-breakpoint
-ALTER TABLE "runs" VALIDATE CONSTRAINT "chk_runs_status";
+ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_reserved_tokens" CHECK ("runs"."reserved_tokens" >= 0);--> statement-breakpoint
+ALTER TABLE "runs" ADD CONSTRAINT "chk_runs_status" CHECK (status in ('running', 'awaiting_approval', 'completed', 'incomplete', 'refused', 'blocked', 'failed'));
