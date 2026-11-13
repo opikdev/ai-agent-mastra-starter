@@ -100,7 +100,47 @@ describe('Idempotency-Key', () => {
 
     const retry = await send(user, thread.id, 'Hi', 'key-1');
     expect(retry.status).toBe(409);
-    expect(await json(retry)).toMatchObject({ type: 'urn:problem:duplicate-request', runId });
+    expect(await json(retry)).toMatchObject({
+      type: 'urn:problem:duplicate-request',
+      runId,
+      runStatus: 'completed',
+    });
+    expect(stack.anthropic.requests.length).toBe(before);
+  });
+
+  it('frees the key of a run that failed before any tool ran, so the retry runs', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply({ status: 400, error: 'invalid request' });
+    const first = await readSse(await send(user, thread.id, 'Hi', 'key-5'));
+    expect(eventsOf(first, 'done')[0]).toMatchObject({ status: 'failed', reason: 'model_error' });
+
+    const retry = await send(user, thread.id, 'Hi', 'key-5');
+    expect(retry.status).toBe(200);
+    expect(eventsOf(await readSse(retry), 'done')[0].status).toBe('completed');
+  });
+
+  it('keeps the key of a run that failed after a tool ran, and says it failed', async () => {
+    const user = stack.signUp();
+    const thread = await user.createThread();
+    stack.reply(
+      { tool: { name: 'listNotes', input: {} } },
+      { status: 400, error: 'invalid request' },
+    );
+    const first = await readSse(await send(user, thread.id, 'Hi', 'key-6'));
+    expect(eventsOf(first, 'tool-result')).toHaveLength(1);
+    expect(eventsOf(first, 'done')[0]).toMatchObject({ status: 'failed', reason: 'model_error' });
+    const before = stack.anthropic.requests.length;
+
+    const retry = await send(user, thread.id, 'Hi', 'key-6');
+    expect(retry.status).toBe(409);
+    const problem = await json(retry);
+    expect(problem).toMatchObject({
+      type: 'urn:problem:duplicate-request',
+      runId: eventsOf(first, 'run')[0].runId,
+      runStatus: 'failed',
+    });
+    expect(problem.detail).toContain('new key');
     expect(stack.anthropic.requests.length).toBe(before);
   });
 

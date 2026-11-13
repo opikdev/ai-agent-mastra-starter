@@ -356,6 +356,10 @@
           "runId": {
             "type": "string",
             "description": "Present when `type` is urn:problem:duplicate-request"
+          },
+          "runStatus": {
+            "type": "string",
+            "description": "The status of the run `runId` names, when `type` is urn:problem:duplicate-request. `failed` means it may have run a tool, so send the message again with a new key"
           }
         },
         "required": ["type", "title", "status", "detail", "instance"]
@@ -964,10 +968,10 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 255,
-              "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started, instead of sending the message twice."
+              "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started and its status, instead of sending the message twice. A run that fails before the agent calls a tool frees its key, so a retry with it runs again."
             },
             "required": false,
-            "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started, instead of sending the message twice.",
+            "description": "Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started and its status, instead of sending the message twice. A run that fails before the agent calls a tool frees its key, so a retry with it runs again.",
             "name": "idempotency-key",
             "in": "header"
           }

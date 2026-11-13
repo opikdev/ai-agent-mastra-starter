@@ -10,7 +10,7 @@ Every error is [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Detail
 | `thread-busy` | 409 | The thread is still answering a message | Wait for `done`, then retry |
 | `approval-pending` | 409 | The thread waits for a tool approval | Approve or decline the pending call |
 | `approval-not-pending` | 409 | That run isn't waiting for this tool call, or it was already decided | Check `runId` and `toolCallId` |
-| `duplicate-request` | 409 | A request with this `Idempotency-Key` already started a run. `runId` names it | Read the reply with `GET /v1/threads/{id}` instead of sending again |
+| `duplicate-request` | 409 | A request with this `Idempotency-Key` already started a run. `runId` names it, and `runStatus` says how it's doing | Read the reply with `GET /v1/threads/{id}`. If `runStatus` is `failed`, send again with a new key |
 | `payload-too-large` | 413 | The body is over 64 KiB | Send less |
 | `unsupported-media-type` | 415 | The body isn't JSON | Send `Content-Type: application/json` |
 | `idempotency-key-reused` | 422 | The `Idempotency-Key` was used within 24 hours for a different request | Use a new key for each new message |

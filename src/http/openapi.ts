@@ -19,6 +19,10 @@ export const problemSchema = z
       .string()
       .optional()
       .openapi({ description: 'Present when `type` is urn:problem:duplicate-request' }),
+    runStatus: z.string().optional().openapi({
+      description:
+        'The status of the run `runId` names, when `type` is urn:problem:duplicate-request. `failed` means it may have run a tool, so send the message again with a new key',
+    }),
   })
   .openapi('Problem');
 

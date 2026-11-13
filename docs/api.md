@@ -83,7 +83,16 @@ Every 10 seconds, the stream also sends a `: keepalive` comment, so proxies don'
 
 ## Retry safely
 
-Send `Idempotency-Key` with a message, such as a UUID, so a retry after a dropped connection can't send it twice. For 24 hours, a request with the same key and body returns `409 duplicate-request` with the `runId` it started, instead of starting another run. Read the reply with `GET /v1/threads/{id}`. The same key with a different body or thread returns `422 idempotency-key-reused`. A request that fails before its run starts, such as with `409 thread-busy`, doesn't use up its key.
+Send `Idempotency-Key` with a message, such as a UUID, so a retry after a dropped connection can't send it twice. For 24 hours, a request with the same key and body returns `409 duplicate-request` with the `runId` it started and that run's `runStatus`, instead of starting another run. The same key with a different body or thread returns `422 idempotency-key-reused`.
+
+Whether a key is used up depends on how far its run got:
+
+| The request | Its key | A retry with the same key |
+|---|---|---|
+| Failed before its run started, such as with `409 thread-busy` or `429 budget-exceeded` | Free | Runs |
+| Started a run that failed or was cut off before the agent called a tool: a model error, a timeout, a shutdown, or a dropped connection | Freed when the run ends | Runs, as the `error` event suggests |
+| Started a run that is still going, paused, or finished | Used | `409 duplicate-request`. Read the reply with `GET /v1/threads/{id}` |
+| Started a run that failed after the agent called a tool | Used | `409 duplicate-request` with `runStatus: "failed"`. Read the thread to see what the tool did, then send again with a new key |
 
 ## Approve a tool call
 

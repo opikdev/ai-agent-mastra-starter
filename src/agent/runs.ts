@@ -47,12 +47,13 @@ function busy(threadId: string) {
   );
 }
 
-/** Claims the key, or fails with the run an earlier request with it started. */
+/** Claims the key, or fails with the run an earlier request with it started, and its status. */
 async function claimKey(tx: Transaction, userId: string, idempotency: Idempotency) {
   const { endpoint, key, fingerprint } = idempotency;
   const [existing] = await tx
-    .select()
+    .select({ requestHash: idempotencyKeys.requestHash, runId: runs.id, status: runs.status })
     .from(idempotencyKeys)
+    .innerJoin(runs, eq(runs.id, idempotencyKeys.runId))
     .where(
       and(
         eq(idempotencyKeys.userId, userId),
@@ -61,7 +62,7 @@ async function claimKey(tx: Transaction, userId: string, idempotency: Idempotenc
         sql`${idempotencyKeys.expiresAt} > now()`,
       ),
     )
-    .for('update');
+    .for('update', { of: idempotencyKeys });
   if (!existing) return;
   if (existing.requestHash !== fingerprint) {
     throw new ProblemError(
@@ -70,10 +71,15 @@ async function claimKey(tx: Transaction, userId: string, idempotency: Idempotenc
     );
   }
   const runId = toPublicId('run', existing.runId);
+  const runStatus = existing.status;
+  const next =
+    runStatus === 'failed'
+      ? 'It failed partway and may have run a tool, so read the thread before you send the message again with a new key.'
+      : 'Read its reply in the thread instead of sending the message again.';
   throw new ProblemError(
     'duplicate-request',
-    `This Idempotency-Key already started run ${runId}. Read its reply in the thread instead of sending the message again.`,
-    { extensions: { runId } },
+    `This Idempotency-Key already started run ${runId}, which is ${runStatus}. ${next}`,
+    { extensions: { runId, runStatus } },
   );
 }
 
@@ -212,16 +218,23 @@ export function createRuns(db: Db, budget: Budget, staleAfterMs: number) {
         .where(eq(runs.id, runId));
     },
 
-    /** Ends the run and frees whatever it still holds of its reservation. */
+    /**
+     * Ends the run and frees whatever it still holds of its reservation. With `releaseKey`, also
+     * frees the Idempotency-Key that started it, so a retry with the same key runs again.
+     */
     async finish(
       runId: string,
       status: Exclude<RunStatus, 'running' | 'awaiting_approval'>,
       stopReason: StopReason | null = null,
+      { releaseKey = false } = {},
     ): Promise<void> {
-      await db
-        .update(runs)
-        .set({ status, stopReason, pending: null, reservedTokens: 0 })
-        .where(eq(runs.id, runId));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(runs)
+          .set({ status, stopReason, pending: null, reservedTokens: 0 })
+          .where(eq(runs.id, runId));
+        if (releaseKey) await tx.delete(idempotencyKeys).where(eq(idempotencyKeys.runId, runId));
+      });
     },
 
     /** Closes a thread's open runs before it's deleted. A run that's still answering blocks it. */

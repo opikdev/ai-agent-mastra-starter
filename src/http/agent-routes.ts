@@ -143,7 +143,7 @@ const idParams = (example: string) =>
 const idempotencyHeaders = z.object({
   'idempotency-key': z.string().min(1).max(255).optional().openapi({
     description:
-      'Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started, instead of sending the message twice.',
+      'Repeating a request with the same key within 24 hours returns `409 duplicate-request` with the run it started and its status, instead of sending the message twice. A run that fails before the agent calls a tool frees its key, so a retry with it runs again.',
   }),
 });
 
@@ -308,6 +308,8 @@ export function createAgentRoutes({
       tokenLimitReached = agentTokens + tokensOf(spent.guardrail) + nextStep > run.reservedTokens;
       return tokenLimitReached;
     };
+    // A run that stops before any tool could act frees its Idempotency-Key, so a retry runs.
+    let toolCalled = resumed;
 
     return streamSSE(
       c,
@@ -333,7 +335,10 @@ export function createAgentRoutes({
             stopWhen,
           });
           result = await relay(output.fullStream, {
-            send: ({ event, data }) => send(event, data),
+            send: ({ event, data }) => {
+              if (event === 'tool-call') toolCalled = true;
+              return send(event, data);
+            },
             record: recordAgent,
             onToolError: (err) => logger.error({ err, requestId, runId }, 'Tool failed'),
           });
@@ -371,8 +376,12 @@ export function createAgentRoutes({
         if (outcome.status === 'awaiting_approval' && result.pending) {
           await runs.await(run.id, result.pending);
           await send('approval-required', { runId, ...result.pending });
-        } else if (outcome.status === 'aborted' || outcome.status === 'awaiting_approval') {
-          await runs.finish(run.id, 'failed', outcome.reason ?? 'error');
+        } else if (outcome.status === 'aborted' || outcome.status === 'failed') {
+          await runs.finish(run.id, 'failed', outcome.reason ?? 'error', {
+            releaseKey: !toolCalled,
+          });
+        } else if (outcome.status === 'awaiting_approval') {
+          await runs.finish(run.id, 'failed', 'error');
         } else {
           await runs.finish(run.id, outcome.status, outcome.reason);
         }
@@ -394,7 +403,9 @@ export function createAgentRoutes({
       },
       async (error, stream) => {
         logger.error({ err: error, requestId, runId }, 'Streaming failed');
-        await runs.finish(run.id, 'failed', 'error').catch(() => {});
+        await runs
+          .finish(run.id, 'failed', 'error', { releaseKey: !toolCalled })
+          .catch((err) => logger.error({ err, requestId, runId }, 'Run finish failed'));
         await stream.writeSSE({
           event: 'error',
           data: JSON.stringify(internalError(requestId).toProblem(c.req.path)),
