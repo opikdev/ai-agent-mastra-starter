@@ -20,7 +20,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `THREAD_RETENTION_DAYS`, 90 by default: the hourly cleanup deletes threads nobody used for that long, with their messages. `0` keeps them.
 - `SHUTDOWN_DRAIN_SECONDS`, 5 by default, and `SHUTDOWN_TIMEOUT_SECONDS`, 30 by default. See Changed.
 - [docs/deploy.md](docs/deploy.md), a go-live checklist: TLS, Postgres TLS, pool sizing, migrations, secrets, draining, docs, the guardrail, and telemetry.
-- The release scans the image with Trivy before pushing it, and publishes it with an SBOM, `mode=max` provenance, and a build provenance attestation. CI scans the image on every pull request.
+- The release pushes the multi-platform image by digest, scans each platform of that exact image with Trivy, and only then tags it, so the tags point at what was scanned. It carries an SBOM, `mode=max` provenance, and a build provenance attestation. CI builds and scans both platforms on every pull request.
 
 ### Changed
 

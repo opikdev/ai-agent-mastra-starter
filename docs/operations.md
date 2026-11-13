@@ -49,7 +49,7 @@ An empty variable, such as `KEY=` in `.env`, counts as unset, so its default app
 2. Run `node src/db/migrate.ts` with `MIGRATION_DATABASE_URL` as one job before each release. It applies Drizzle migrations and Mastra's own tables, under a Postgres advisory lock, so a second runner waits and then has nothing to do.
 3. Run the image with `DATABASE_URL` for `agent_app`. Check `/readyz` before sending traffic.
 
-The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag, once CI passes on that tag and Trivy finds no fixable HIGH or CRITICAL vulnerability. It carries an SBOM and a build provenance attestation. Any number of instances can run at once: runs, approvals, budgets, reservations, and limits all live in Postgres.
+The image is published to `ghcr.io/<owner>/<repo>` for each `v*` tag, for `linux/amd64` and `linux/arm64`, once CI passes on that tag. The release pushes it untagged, scans each platform of that exact digest with Trivy, and tags it only if neither has a fixable HIGH or CRITICAL vulnerability. It carries an SBOM and a build provenance attestation. Any number of instances can run at once: runs, approvals, budgets, reservations, and limits all live in Postgres.
 
 On `SIGTERM` or `SIGINT`, the server fails `/readyz` for `SHUTDOWN_DRAIN_SECONDS`, then stops accepting connections and lets runs in flight finish for up to `SHUTDOWN_TIMEOUT_SECONDS`. It then aborts what's left: each aborted run is saved as `failed` with reason `shutdown`, frees its reserved tokens, and its client gets an `error` event and then `done` with status `aborted`, so the thread is free on the next instance. Set the platform's grace period above drain + timeout + 15 seconds, such as Compose's `stop_grace_period: 50s`.
 
